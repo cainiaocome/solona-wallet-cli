@@ -101,7 +101,7 @@ The intended CI order is formatting, source tests, `linux/amd64` image build, PT
 
 The post-review GitHub Actions run `35480368693` passed formatting, 18 unit tests, the TypeScript build, the exact-image Docker build, all 8 Docker E2E tests, GHCR authentication, and the exact tested-image push. The local container runtime cannot reproduce the runner's bind-mount ownership behavior, so this GitHub result is the authoritative Docker validation for this workspace.
 
-The v0.2 GitHub Actions run `35481360092` passed dependency installation, formatting, 22 unit tests, the TypeScript build, the exact-image Docker build, all 8 Docker E2E tests, GHCR authentication, and the exact tested-image push. No live mainnet lending write was performed; the v0.2 unit and CI tests intentionally stop at deterministic instruction conversion, safety gates, and the existing mock-RPC transaction coverage.
+The post-review v0.2 GitHub Actions run `35482612396` passed dependency installation, formatting, 23 unit tests, the TypeScript build, the exact-image Docker build, all 9 Docker E2E tests, GHCR authentication, and the exact tested-image push. No live mainnet lending write was performed; the v0.2 unit and CI tests intentionally stop at deterministic instruction conversion, safety gates, and the existing mock-RPC transaction coverage.
 
 ## Known operational limits
 

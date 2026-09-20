@@ -51,4 +51,4 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Direct non-TTY shell smoke test: piped `help`/`exit` exits 0; unknown flags exit 2.
 - Deterministic mock-RPC smoke test: JSON SOL dry-run parses as one object and confirms no passphrase/output leakage.
 - v0.2 command smoke tests: help/completion expose `lend`; devnet lending is rejected before wallet/network use after the mainnet guard.
-- Docker E2E: v0.2 GitHub Actions run 35481360092 passed all 8 image tests and published the exact tested image; Docker remains unavailable in this workspace.
+- Docker E2E: post-review GitHub Actions run 35482612396 passed all 9 image tests and published the exact tested image; Docker remains unavailable in this workspace.
