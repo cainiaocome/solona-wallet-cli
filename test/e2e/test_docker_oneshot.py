@@ -100,7 +100,7 @@ class DockerOneShotTests(unittest.TestCase):
             result = self.run_wallet(
                 "send 11111111111111111111111111111112 1 --dry-run", json_output=True
             )
-            self.assertEqual(result.returncode, 4)
+            self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
             self.assertNotIn("sendTransaction", Handler.state.methods)
         finally:
             Handler.state.fail_simulation = False

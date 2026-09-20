@@ -21,6 +21,7 @@ import {
   UnsupportedTokenExtensionError,
   ConfirmationError,
   RpcError,
+  safeJson,
 } from "../errors/errors.js";
 import {
   formatSol,
@@ -198,7 +199,7 @@ export async function sendToken(
   );
   if (simulation.value.err)
     throw new SimulationError(
-      `Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`,
+      `Transaction simulation failed: ${safeJson(simulation.value.err)}`,
       { logs: simulation.value.logs },
     );
   if (dryRun) {

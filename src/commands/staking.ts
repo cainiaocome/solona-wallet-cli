@@ -25,6 +25,7 @@ import {
   SimulationError,
   StakeAccountError,
   ValidatorError,
+  safeJson,
 } from "../errors/errors.js";
 import { confirm } from "../shell/prompt.js";
 import { flagValue, hasFlag, type ParsedCommand } from "../shell/parser.js";
@@ -194,7 +195,7 @@ export async function stakeCreate(
   );
   if (simulation.value.err)
     throw new SimulationError(
-      `Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`,
+      `Transaction simulation failed: ${safeJson(simulation.value.err)}`,
       { logs: simulation.value.logs },
     );
   if (summary.dryRun) {
@@ -459,7 +460,7 @@ async function runStakeInstruction(
   );
   if (simulation.value.err)
     throw new SimulationError(
-      `Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`,
+      `Transaction simulation failed: ${safeJson(simulation.value.err)}`,
       { logs: simulation.value.logs },
     );
   if (preflight.dryRun) {

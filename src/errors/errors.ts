@@ -112,3 +112,9 @@ export function redact(value: unknown): unknown {
     ]),
   );
 }
+
+export function safeJson(value: unknown): string {
+  return JSON.stringify(value, (_key, child) =>
+    typeof child === "bigint" ? child.toString() : child,
+  );
+}

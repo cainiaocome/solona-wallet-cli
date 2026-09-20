@@ -14,6 +14,7 @@ import {
   SimulationError,
   ConfirmationError,
   InsufficientBalanceError,
+  safeJson,
 } from "../errors/errors.js";
 import { formatSol, parseSol } from "../solana/amounts.js";
 import { rpcRequest } from "../solana/rpc.js";
@@ -95,7 +96,7 @@ export async function sendSol(
   );
   if (simulation.value.err)
     throw new SimulationError(
-      `Transaction simulation failed: ${JSON.stringify(simulation.value.err)}`,
+      `Transaction simulation failed: ${safeJson(simulation.value.err)}`,
       { logs: simulation.value.logs },
     );
   if (dryRun) {
@@ -157,7 +158,7 @@ export async function confirmSignature(
     const status = response.value[0];
     if (status?.err)
       throw new ConfirmationError(
-        `Transaction failed after broadcast: ${JSON.stringify(status.err)}`,
+        `Transaction failed after broadcast: ${safeJson(status.err)}`,
         { signature },
       );
     if (

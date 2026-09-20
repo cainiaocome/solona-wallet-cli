@@ -29,6 +29,7 @@ class DockerReplTests(unittest.TestCase):
             child.expect("token")
             child.send(" \t\t")
             child.expect("list")
+            child.send("\x15")
             child.sendline("help")
             child.expect("wallet import")
             child.sendline("address")
