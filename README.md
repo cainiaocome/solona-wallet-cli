@@ -35,12 +35,18 @@ pushes. Version pushes additionally publish their version tags.
 ## Local development
 
 ```bash
-npm install
+npm ci --legacy-peer-deps
 npm test
 npm run build
 npm run format:check
 npm run dev
 ```
+
+The repository includes a `.npmrc` policy that prevents npm from selecting
+package versions published less than seven days ago. The lockfile still pins
+the exact dependency versions. This adds a short delay for newly released
+security fixes or compatible upgrades; see [docs/supply-chain.md](docs/supply-chain.md)
+for the update procedure and emergency override guidance.
 
 The code was tested with these exact dependency versions in the current lockfile: `@jup-ag/lend 0.0.108`, `@jup-ag/lend-read 0.0.14`, `@solana/kit 8.3.0`, `@solana/sysvars 8.3.0`, `@solana-program/system 0.14.1`, `@solana-program/stake 0.9.1`, `@solana-program/token 0.16.1`, `@solana-program/token-2022 0.17.0`, Node `>=24`, TypeScript `7.0.2`, Vitest `5.0.0`, Vite `8.3.0`, and Prettier `3.6.2`.
 

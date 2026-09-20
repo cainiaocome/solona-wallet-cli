@@ -13,12 +13,16 @@ permissions:
 jobs:
   build-test-and-publish:
     runs-on: ubuntu-latest
+    env:
+      NPM_CONFIG_MIN_RELEASE_AGE: "7"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+      - name: Verify npm supply-chain policy
+        run: test "$(npm config get min-release-age)" = "7"
       - run: npm ci --legacy-peer-deps
       - run: npm run format:check
       - run: npm test

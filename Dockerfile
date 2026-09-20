@@ -1,8 +1,9 @@
 FROM node:24-bookworm-slim AS build
 
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps
+COPY package.json package-lock.json .npmrc ./
+RUN test "$(npm config get min-release-age)" = "7" \
+  && npm ci --legacy-peer-deps
 COPY . .
 RUN npm test
 RUN npm run build

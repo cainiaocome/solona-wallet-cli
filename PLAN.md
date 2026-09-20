@@ -56,3 +56,5 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Docker E2E: post-review GitHub Actions run 35482612396 passed all 9 image tests and published the exact tested image; Docker remains unavailable in this workspace.
 - Documentation-only follow-up validation passes: Prettier, Black, 23 unit tests, TypeScript lint, build, and `git diff --check`.
 - Image publication now includes branch, bare short-commit, and legacy `latest` tags; the wrapper defaults to the repository's `master` image tag.
+- npm dependency installation now enforces the seven-day `min-release-age` policy in local installs, GitHub Actions, and Docker builds.
+- Supply-chain validation passes locally with the shell override removed: project npm config reports `7`, and `npm ci --dry-run --legacy-peer-deps` succeeds. The changed Docker install path must be validated by the next GitHub Actions run because no usable local Docker daemon is available.

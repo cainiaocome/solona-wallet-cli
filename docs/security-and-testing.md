@@ -109,6 +109,14 @@ The Jupiter v0.2 adapter is the only place that imports the legacy Jupiter SDK
 types and its direct compatibility dependencies. The runtime image removes
 unused upstream build/test tools after production pruning.
 
+The repository's `.npmrc` sets `min-release-age=7`. npm interprets this as
+seven days: package versions must have been published more than seven days ago
+before they can be selected. The same policy is checked in GitHub Actions and
+inside the Docker build. This reduces exposure to a compromised brand-new
+release, while the lockfile provides exact version reproducibility. It is not
+a complete supply-chain defense: an older compromised package, a malicious
+maintainer, or a compromised registry can still be a risk.
+
 `npm audit --omit=dev` currently reports upstream transitive advisories in the
 pinned Jupiter SDK graph. This is documented rather than hidden. A future
 upgrade should be treated as a protocol integration change: inspect the SDK

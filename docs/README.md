@@ -15,6 +15,8 @@ read the documents in this order:
 5. [Security and testing](security-and-testing.md) — what the wallet protects,
    what it cannot protect, how to test without real funds, and how CI validates
    the Docker image.
+6. [Supply-chain controls](supply-chain.md) — how the lockfile, release-age
+   policy, CI, Docker build, and dependency updates work together.
 
 The more focused reference documents are also useful:
 
