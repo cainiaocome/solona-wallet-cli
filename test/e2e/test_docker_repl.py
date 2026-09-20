@@ -100,7 +100,7 @@ class DockerReplTests(unittest.TestCase):
             child.expect(r"sol-wallet \[devnet [^]]+\]>")
 
             child.send("stake ")
-            child.send("\t")
+            child.send("\t\t")
             child.expect("create")
             child.send("\x15")
             child.sendline("exit")
