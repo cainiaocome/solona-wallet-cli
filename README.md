@@ -23,7 +23,14 @@ scripts/sol-wallet
 scripts/sol-wallet -c "balance" --json
 ```
 
-Set `SOL_WALLET_IMAGE` or `SOL_WALLET_CONFIG_DIR` to override the wrapper defaults.
+The wrapper defaults to `ghcr.io/cainiaocome/sol-wallet:master`, which follows
+the latest image published from the `master` branch. Set `SOL_WALLET_IMAGE` to
+use a fork, a version tag, or a specific seven-character commit tag. Set
+`SOL_WALLET_CONFIG_DIR` to override the wallet state directory.
+
+The workflow also publishes `latest`, the branch name (`master` or `main`),
+and the bare seven-character commit hash (for example `36f2cc6`) for branch
+pushes. Version pushes additionally publish their version tags.
 
 ## Local development
 

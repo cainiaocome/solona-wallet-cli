@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="${SOL_WALLET_IMAGE:-ghcr.io/<owner>/sol-wallet:latest}"
+# Follow the latest image built from this repository's default branch. Forks
+# and callers testing another image can override this with SOL_WALLET_IMAGE.
+IMAGE="${SOL_WALLET_IMAGE:-ghcr.io/cainiaocome/sol-wallet:master}"
 CONFIG_DIR="${SOL_WALLET_CONFIG_DIR:-$HOME/.config/sol-wallet}"
-
-if [[ "$IMAGE" == *"<owner>"* ]]; then
-  echo "Set SOL_WALLET_IMAGE to a published ghcr.io image before using the wrapper." >&2
-  exit 2
-fi
 
 mkdir -p "$CONFIG_DIR"
 

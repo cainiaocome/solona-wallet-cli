@@ -399,7 +399,7 @@ Conceptually:
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="${SOL_WALLET_IMAGE:-ghcr.io/<owner>/sol-wallet:latest}"
+IMAGE="${SOL_WALLET_IMAGE:-ghcr.io/<owner>/sol-wallet:master}"
 CONFIG_DIR="${SOL_WALLET_CONFIG_DIR:-$HOME/.config/sol-wallet}"
 
 mkdir -p "$CONFIG_DIR"
@@ -3028,17 +3028,19 @@ Prefer using a content-addressed image ID/digest or a single Buildx build flow t
 
 ### GHCR tags
 
-For main:
+For a trusted branch push:
 
 ```text
 ghcr.io/<owner>/sol-wallet:latest
-ghcr.io/<owner>/sol-wallet:sha-<shortsha>
+ghcr.io/<owner>/sol-wallet:<branch>
+ghcr.io/<owner>/sol-wallet:<shortsha>
 ```
 
 For version tags:
 
 ```text
 ghcr.io/<owner>/sol-wallet:v0.1.0
+ghcr.io/<owner>/sol-wallet:0.1.0
 ghcr.io/<owner>/sol-wallet:0.1
 ghcr.io/<owner>/sol-wallet:latest
 ```

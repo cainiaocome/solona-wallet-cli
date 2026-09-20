@@ -57,16 +57,23 @@ jobs:
         env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/sol-wallet
         run: |
-          docker tag sol-wallet:e2e "$IMAGE:sha-${GITHUB_SHA::7}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          docker tag sol-wallet:e2e "$IMAGE:$SHORT_SHA"
           docker tag sol-wallet:e2e "$IMAGE:latest"
+          if [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
+            docker tag sol-wallet:e2e "$IMAGE:$GITHUB_REF_NAME"
+          fi
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             docker tag sol-wallet:e2e "$IMAGE:${GITHUB_REF_NAME}"
             docker tag sol-wallet:e2e "$IMAGE:${GITHUB_REF_NAME#v}"
             VERSION="${GITHUB_REF_NAME#v}"
             docker tag sol-wallet:e2e "$IMAGE:${VERSION%.*}"
           fi
-          docker push "$IMAGE:sha-${GITHUB_SHA::7}"
+          docker push "$IMAGE:$SHORT_SHA"
           docker push "$IMAGE:latest"
+          if [[ "$GITHUB_REF_TYPE" == "branch" ]]; then
+            docker push "$IMAGE:$GITHUB_REF_NAME"
+          fi
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             docker push "$IMAGE:${GITHUB_REF_NAME}"
             docker push "$IMAGE:${GITHUB_REF_NAME#v}"

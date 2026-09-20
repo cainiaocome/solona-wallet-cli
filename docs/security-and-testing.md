@@ -91,6 +91,12 @@ transaction path. Publication happens only after all gates pass. Pull requests
 run the gates but do not publish; pushes to the main branch and version tags
 publish according to `.github/workflows/docker.yml`.
 
+Branch pushes publish `latest`, the branch name, and the bare seven-character
+commit hash. For example, a master push publishes `master` and `abc1234`
+alongside `latest`. Version-tag pushes publish the version-specific tags. The
+host wrapper defaults to the repository's `master` image and accepts
+`SOL_WALLET_IMAGE` for overrides.
+
 This workspace may not have a usable Docker daemon or the same bind-mount
 ownership behavior as the GitHub runner. When local Docker cannot run the PTY
 tests, record that honestly and use the GitHub Actions run as the authoritative

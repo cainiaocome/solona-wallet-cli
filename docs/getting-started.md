@@ -39,6 +39,10 @@ scripts/sol-wallet
 scripts/sol-wallet -c "balance" --json
 ```
 
+By default the wrapper runs `ghcr.io/cainiaocome/sol-wallet:master`, the
+latest image published from this repository's `master` branch. Set
+`SOL_WALLET_IMAGE` when using a fork, a release tag, or a specific commit tag.
+
 The container runs as an unprivileged user. Mapping your host UID/GID lets the
 container write the `0700` configuration directory without making that
 directory world-readable.
