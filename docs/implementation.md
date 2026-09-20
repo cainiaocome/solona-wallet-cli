@@ -91,7 +91,7 @@ Do not claim a devnet/mainnet write was tested unless an opt-in integration or m
 
 `Dockerfile` is multi-stage. The build stage runs `npm ci`, tests, and `npm run build`, then prunes development dependencies. The runtime stage contains `package.json`, production `node_modules`, and `dist` only, runs as `solwallet` (UID/GID `10001` by default), and starts directly at `dist/cli.js`. The documented mount is `/home/solwallet/.config/sol-wallet`; direct callers should pass their host UID/GID, while `scripts/sol-wallet` does that automatically.
 
-The intended CI order is source tests, `linux/amd64` image build, PTY/mock-RPC E2E against that exact tag, then GHCR authentication and push. Pull requests never push. CI must not upload mounted wallet directories, passwords, private keys, or arbitrary logs.
+The intended CI order is source tests, `linux/amd64` image build, PTY/mock-RPC E2E against that exact tag, then GHCR authentication and push. Pushes to the repository's `main` or `master` branch and version tags trigger the workflow; pull requests never push. CI must not upload mounted wallet directories, passwords, private keys, or arbitrary logs.
 
 ## Known operational limits
 

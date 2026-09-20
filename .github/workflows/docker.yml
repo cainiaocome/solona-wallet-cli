@@ -3,7 +3,7 @@ name: Docker
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, master]
     tags: ["v*"]
 
 permissions:
@@ -31,14 +31,14 @@ jobs:
           python3 -m unittest discover -s test/e2e -p 'test_*.py'
 
       - name: Authenticate to GHCR after all gates pass
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push the exact E2E-tested image
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
         env:
           IMAGE: ghcr.io/${{ github.repository_owner }}/sol-wallet
         run: |
