@@ -8,7 +8,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 
 - TypeScript/ESM application, lockfile, tests, Docker packaging, wrapper, workflow, and operational documentation are implemented.
 - v0.1 is complete and published through the verified Docker/GHCR workflow.
-- v0.2 Jupiter Lend adapter, commands, unit coverage, and documentation are implemented locally.
+- v0.2 Jupiter Lend adapter, commands, unit coverage, and documentation are implemented and published.
 - Source formatting, build, and offline unit tests pass.
 - The local Docker image build passed its in-image test/build/prune stages before the review fixes.
 - The Docker PTY/mock-RPC E2E is now a hard gate with PTY wallet import, signer unlock, completion, JSON config, and failure artifacts; it must be rerun by GitHub Actions because this workspace has no usable Docker daemon/bind-mount runtime.
@@ -25,7 +25,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - [complete] Verify the current stable Jupiter Lend SDK APIs and isolate legacy web3 types at the adapter boundary.
 - [complete] Implement mainnet canonical-USDC `lend status`, `deposit`, `withdraw`, and `withdraw --all`.
 - [complete] Add v0.2 unit tests and operational/dependency-risk documentation.
-- [in progress] Run v0.2 full validation and GitHub Docker workflow.
+- [complete] Run v0.2 full validation and GitHub Docker workflow.
 
 ## Decisions / constraints
 
@@ -51,4 +51,4 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Direct non-TTY shell smoke test: piped `help`/`exit` exits 0; unknown flags exit 2.
 - Deterministic mock-RPC smoke test: JSON SOL dry-run parses as one object and confirms no passphrase/output leakage.
 - v0.2 command smoke tests: help/completion expose `lend`; devnet lending is rejected before wallet/network use after the mainnet guard.
-- Docker E2E: v0.1 GitHub Actions run 35480368693 passed all 8 image tests; v0.2 Docker validation remains pending because Docker is unavailable in this workspace.
+- Docker E2E: v0.2 GitHub Actions run 35481360092 passed all 8 image tests and published the exact tested image; Docker remains unavailable in this workspace.
