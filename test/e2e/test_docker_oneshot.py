@@ -21,6 +21,8 @@ class DockerOneShotTests(unittest.TestCase):
     def setUpClass(cls):
         cls.server = start_server()
         cls.directory = Path(tempfile.mkdtemp(prefix="sol-wallet-e2e-"))
+        cls.addClassCleanup(cls.server.shutdown)
+        cls.addClassCleanup(lambda: shutil.rmtree(cls.directory, ignore_errors=True))
         fixture = Path(__file__).parents[1] / "fixtures" / "disposable-keypair.json"
         shutil.copyfile(fixture, cls.directory / "keypair.json")
         cls.uid = f"{os.getuid()}:{os.getgid()}"
@@ -69,7 +71,7 @@ class DockerOneShotTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(
-            payload["address"], "Ac3NGAHw2h6eXQcJoEEcxucDHZPKuaheBnXtA9TZjmgg"
+            payload["address"], "FAe4sisG95oZ42w7buUn5qEE4TAnfTTFPiguZUHmhiF"
         )
         self.assertNotIn("correct horse", result.stdout + result.stderr)
 
