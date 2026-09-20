@@ -48,7 +48,10 @@ describe("encrypted keystore", () => {
       ).rejects.toThrow(/unlock/);
       await expect(
         decryptSecretKey(
-          { ...stored!, ciphertext: `A${stored!.ciphertext.slice(1)}` },
+          {
+            ...stored!,
+            ciphertext: `${stored!.ciphertext[0] === "A" ? "B" : "A"}${stored!.ciphertext.slice(1)}`,
+          },
           "unit-test-passphrase",
         ),
       ).rejects.toThrow(/unlock/);
