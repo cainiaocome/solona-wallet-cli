@@ -19,7 +19,7 @@ Implement the v0.1 Solana-only wallet described in `docs/spec.md`, with an inter
 - [complete] Implement SOL/token transaction pipeline.
 - [complete] Implement native staking commands.
 - [complete] Add Docker image, wrapper, mock RPC, E2E tests, and CI.
-- [in progress] Run the post-review GitHub workflow and inspect its Docker E2E and publish result.
+- [complete] Run the post-review GitHub workflow and inspect its Docker E2E and publish result.
 
 ## Decisions / constraints
 
@@ -40,4 +40,4 @@ Implement the v0.1 Solana-only wallet described in `docs/spec.md`, with an inter
 - Direct deterministic mock-RPC test: SOL dry-run and signed confirmation path passing.
 - Direct non-TTY shell smoke test: piped `help`/`exit` exits 0; unknown flags exit 2.
 - Deterministic mock-RPC smoke test: JSON SOL dry-run parses as one object and confirms no passphrase/output leakage.
-- Docker E2E: pending the post-review GitHub Actions run because Docker is unavailable in this workspace.
+- Docker E2E: GitHub Actions run 35480368693 passed all 8 image tests and published the exact tested image; Docker remains unavailable in this workspace.

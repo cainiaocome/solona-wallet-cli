@@ -95,6 +95,8 @@ Do not claim a devnet/mainnet write was tested unless an opt-in integration or m
 
 The intended CI order is formatting, source tests, `linux/amd64` image build, PTY/mock-RPC E2E against that exact tag, then GHCR authentication and push. Pushes to the repository's `main` or `master` branch and version tags trigger the workflow; pull requests never push. Version tags also publish the minor-series tag (for example `v0.1.0` publishes `0.1`). CI must not upload mounted wallet directories, passwords, private keys, or arbitrary logs.
 
+The post-review GitHub Actions run `35480368693` passed formatting, 18 unit tests, the TypeScript build, the exact-image Docker build, all 8 Docker E2E tests, GHCR authentication, and the exact tested-image push. The local container runtime cannot reproduce the runner's bind-mount ownership behavior, so this GitHub result is the authoritative Docker validation for this workspace.
+
 ## Known operational limits
 
 - The mainnet and devnet public RPC defaults are configurable and are not guaranteed available.
