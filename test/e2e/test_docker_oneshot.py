@@ -20,6 +20,7 @@ class DockerOneShotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.server = start_server()
+        cls.port = cls.server.server_address[1]
         cls.directory = Path(tempfile.mkdtemp(prefix="sol-wallet-e2e-"))
         cls.addClassCleanup(cls.server.shutdown)
         cls.addClassCleanup(lambda: shutil.rmtree(cls.directory, ignore_errors=True))
@@ -44,6 +45,7 @@ class DockerOneShotTests(unittest.TestCase):
             "docker",
             "run",
             "--rm",
+            "-i",
             "--network",
             "host",
             "--user",
@@ -53,7 +55,7 @@ class DockerOneShotTests(unittest.TestCase):
             "-e",
             "SOL_WALLET_CLUSTER=devnet",
             "-e",
-            "SOL_WALLET_RPC_URL=http://127.0.0.1:8899",
+            f"SOL_WALLET_RPC_URL=http://127.0.0.1:{cls.port}",
             "-v",
             f"{cls.directory}:/home/solwallet/.config/sol-wallet",
             IMAGE,

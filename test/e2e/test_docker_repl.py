@@ -20,8 +20,9 @@ class DockerReplTests(unittest.TestCase):
         except ImportError:
             self.skipTest("pexpect is required for PTY E2E")
         server = start_server()
+        port = server.server_address[1]
         directory = Path(tempfile.mkdtemp(prefix="sol-wallet-repl-"))
-        child = self.spawn(pexpect, directory)
+        child = self.spawn(pexpect, directory, port)
         try:
             child.expect(r"sol-wallet \[devnet no-wallet\]>")
             child.send("tok\t")
@@ -37,7 +38,7 @@ class DockerReplTests(unittest.TestCase):
             self.assertEqual(child.exitstatus, 0)
             self.assertTrue((directory / "history").exists())
 
-            second = self.spawn(pexpect, directory)
+            second = self.spawn(pexpect, directory, port)
             try:
                 second.expect(r"sol-wallet \[devnet no-wallet\]>")
                 second.sendline("history")
@@ -59,7 +60,7 @@ class DockerReplTests(unittest.TestCase):
             shutil.rmtree(directory, ignore_errors=True)
 
     @staticmethod
-    def spawn(pexpect, directory):
+    def spawn(pexpect, directory, port):
         return pexpect.spawn(
             "docker",
             [
@@ -75,7 +76,7 @@ class DockerReplTests(unittest.TestCase):
                 "-e",
                 "SOL_WALLET_CLUSTER=devnet",
                 "-e",
-                "SOL_WALLET_RPC_URL=http://127.0.0.1:8899",
+                f"SOL_WALLET_RPC_URL=http://127.0.0.1:{port}",
                 "-v",
                 f"{directory}:/home/solwallet/.config/sol-wallet",
                 IMAGE,

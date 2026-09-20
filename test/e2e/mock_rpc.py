@@ -104,7 +104,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
 
-def start_server(port: int = 8899):
+def start_server(port: int = 0):
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
