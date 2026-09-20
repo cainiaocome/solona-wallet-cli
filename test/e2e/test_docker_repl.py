@@ -36,6 +36,7 @@ class DockerReplTests(unittest.TestCase):
             child.expect("No wallet is imported")
             child.sendline("exit")
             child.expect(pexpect.EOF)
+            child.close()
             self.assertEqual(child.exitstatus, 0)
             self.assertTrue((directory / "history").exists())
 
@@ -48,6 +49,7 @@ class DockerReplTests(unittest.TestCase):
                 second.expect("Unknown command")
                 second.sendline("exit")
                 second.expect(pexpect.EOF)
+                second.close()
             finally:
                 if second.isalive():
                     second.close(force=True)
