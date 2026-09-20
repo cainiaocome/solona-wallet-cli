@@ -30,10 +30,11 @@ export async function importWallet(
   let created = false;
   try {
     const publicKey = await deriveAddress(secret);
-    context.output.print(
-      { ok: true, address: publicKey },
-      `Derived address: ${publicKey}`,
-    );
+    if (!context.output.json)
+      context.output.print(
+        { ok: true, address: publicKey },
+        `Derived address: ${publicKey}`,
+      );
     if (!(await confirm("Is this the expected wallet address?")))
       throw new KeystoreError("Wallet import cancelled.");
     const passphrase = await readSecret("New keystore passphrase: ");

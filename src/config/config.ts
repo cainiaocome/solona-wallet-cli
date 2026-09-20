@@ -26,6 +26,16 @@ export interface ConfigOverrides {
   configDir?: string;
 }
 
+export function setSessionCluster(config: AppConfig, cluster: Cluster): void {
+  const currentRpcIsDefault = config.rpcUrl === defaultRpcUrl(config.cluster);
+  if (!currentRpcIsDefault && cluster !== config.cluster)
+    throw new ConfigError(
+      "An explicit RPC URL is pinned for this session. Run `set rpc-url` explicitly before switching clusters.",
+    );
+  config.cluster = cluster;
+  if (currentRpcIsDefault) config.rpcUrl = defaultRpcUrl(cluster);
+}
+
 export function defaultConfigDir(): string {
   return path.join(os.homedir(), ".config", "sol-wallet");
 }

@@ -62,6 +62,57 @@ class DockerReplTests(unittest.TestCase):
             server.shutdown()
             shutil.rmtree(directory, ignore_errors=True)
 
+    def test_import_signer_prompt_and_stake_completion_through_pty(self):
+        try:
+            import pexpect
+        except ImportError:
+            self.skipTest("pexpect is required for PTY E2E")
+        server = start_server()
+        port = server.server_address[1]
+        directory = Path(tempfile.mkdtemp(prefix="sol-wallet-import-"))
+        fixture = Path(__file__).parents[1] / "fixtures" / "disposable-keypair.json"
+        shutil.copyfile(fixture, directory / "keypair.json")
+        child = self.spawn(pexpect, directory, port)
+        passphrase = "correct horse battery staple"
+        try:
+            child.expect(r"sol-wallet \[devnet no-wallet\]>")
+            child.sendline(
+                "wallet import --keypair-file "
+                "/home/solwallet/.config/sol-wallet/keypair.json"
+            )
+            child.expect("Derived address:")
+            child.sendline("y")
+            child.expect("New keystore passphrase:")
+            child.sendline(passphrase)
+            child.expect("Confirm passphrase:")
+            child.sendline(passphrase)
+            child.expect("Wallet imported")
+            child.expect(r"sol-wallet \[devnet [^]]+\]>")
+
+            keystore = (directory / "keystore.json").read_text()
+            self.assertNotIn(passphrase, keystore)
+            self.assertNotIn((directory / "keypair.json").read_text(), keystore)
+
+            child.sendline("send 11111111111111111111111111111112 1 --yes")
+            child.expect("Keystore passphrase:")
+            child.sendline(passphrase)
+            child.expect("Transaction confirmed")
+            child.expect(r"sol-wallet \[devnet [^]]+\]>")
+
+            child.send("stake ")
+            child.send("\t")
+            child.expect("create")
+            child.send("\x15")
+            child.sendline("exit")
+            child.expect(pexpect.EOF)
+            child.close()
+            self.assertEqual(child.exitstatus, 0)
+        finally:
+            if child.isalive():
+                child.close(force=True)
+            server.shutdown()
+            shutil.rmtree(directory, ignore_errors=True)
+
     @staticmethod
     def spawn(pexpect, directory, port):
         return pexpect.spawn(

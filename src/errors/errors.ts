@@ -76,6 +76,12 @@ export class ConfirmationError extends AppError {
   }
 }
 
+export class TransactionRejectedError extends AppError {
+  constructor(message = "Transaction cancelled by user.", details?: unknown) {
+    super(message, "TransactionRejectedError", 2, details);
+  }
+}
+
 export class ValidatorError extends AppError {
   constructor(message: string, details?: unknown) {
     super(message, "ValidatorError", 2, details);

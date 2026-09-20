@@ -11,10 +11,13 @@ export async function runRepl(context: CommandContext): Promise<number> {
   process.stdout.write("Solana Wallet CLI\n");
   process.stdout.write("Type `help` for commands.\n\n");
 
+  if (!process.stdin.isTTY) return runPiped(context);
+
   let history = await readHistory(context.config.configDir);
   while (true) {
+    const prompt = await shellPrompt(context);
     const rl = createInterface(context, history);
-    await setPrompt(rl, context);
+    rl.setPrompt(prompt);
     const line = await readInput(rl);
     if (line === null) {
       rl.close();
@@ -34,6 +37,24 @@ export async function runRepl(context: CommandContext): Promise<number> {
     }
     history = await readHistory(context.config.configDir);
   }
+}
+
+async function runPiped(context: CommandContext): Promise<number> {
+  const input = readline.createInterface({
+    input: process.stdin,
+    crlfDelay: Infinity,
+  });
+  for await (const line of input) {
+    await appendHistory(context.config.configDir, String(line));
+    try {
+      const result = await executeLine(context, String(line));
+      if (result.exit) break;
+    } catch (error) {
+      context.output.error(asAppError(error));
+    }
+  }
+  input.close();
+  return 0;
 }
 
 function createInterface(
@@ -68,7 +89,9 @@ function createInterface(
 }
 
 function readInput(rl: readline.Interface): Promise<string | null> {
-  return new Promise((resolve) => {
+  if ((rl as readline.Interface & { closed?: boolean }).closed)
+    return Promise.resolve(null);
+  return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (value: string | null) => {
       if (settled) return;
@@ -78,15 +101,18 @@ function readInput(rl: readline.Interface): Promise<string | null> {
     };
     const onClose = () => finish(null);
     rl.once("close", onClose);
-    rl.question(rl.getPrompt(), (line) => finish(line));
+    try {
+      rl.question(rl.getPrompt(), (line) => finish(line));
+    } catch (error) {
+      if (error instanceof Error && /readline was closed/i.test(error.message))
+        finish(null);
+      else reject(error);
+    }
   });
 }
 
-async function setPrompt(
-  rl: readline.Interface,
-  context: CommandContext,
-): Promise<void> {
+async function shellPrompt(context: CommandContext): Promise<string> {
   const wallet = await getWalletAddress(context.config.configDir);
   const identity = wallet ? ` ${shortenAddress(wallet)}` : " no-wallet";
-  rl.setPrompt(`sol-wallet [${context.config.cluster}${identity}]> `);
+  return `sol-wallet [${context.config.cluster}${identity}]> `;
 }

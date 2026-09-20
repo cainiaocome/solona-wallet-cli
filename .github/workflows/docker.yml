@@ -20,6 +20,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --legacy-peer-deps
+      - run: npm run format:check
       - run: npm test
       - run: npm run build
       - run: docker build --platform linux/amd64 -t sol-wallet:e2e .
@@ -27,8 +28,22 @@ jobs:
         env:
           SOL_WALLET_E2E_IMAGE: sol-wallet:e2e
         run: |
-          python3 -m pip install --disable-pip-version-check --no-cache-dir pexpect
-          python3 -m unittest discover -s test/e2e -p 'test_*.py'
+          python3 -m pip install --disable-pip-version-check --no-cache-dir pexpect black==25.1.0
+          python3 -m black --check test/e2e
+          python3 test/e2e/run_tests.py
+
+      - name: Collect Docker E2E failure artifacts
+        if: failure()
+        run: |
+          mkdir -p test/e2e/.artifacts
+          docker image inspect sol-wallet:e2e > test/e2e/.artifacts/image-inspect.json || true
+      - name: Upload Docker E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-e2e-failure-${{ github.run_id }}
+          path: test/e2e/.artifacts
+          if-no-files-found: ignore
 
       - name: Authenticate to GHCR after all gates pass
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
@@ -47,10 +62,14 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             docker tag sol-wallet:e2e "$IMAGE:${GITHUB_REF_NAME}"
             docker tag sol-wallet:e2e "$IMAGE:${GITHUB_REF_NAME#v}"
+            VERSION="${GITHUB_REF_NAME#v}"
+            docker tag sol-wallet:e2e "$IMAGE:${VERSION%.*}"
           fi
           docker push "$IMAGE:sha-${GITHUB_SHA::7}"
           docker push "$IMAGE:latest"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             docker push "$IMAGE:${GITHUB_REF_NAME}"
             docker push "$IMAGE:${GITHUB_REF_NAME#v}"
+            VERSION="${GITHUB_REF_NAME#v}"
+            docker push "$IMAGE:${VERSION%.*}"
           fi

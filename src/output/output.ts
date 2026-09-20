@@ -13,6 +13,10 @@ export class Output {
     return this.options.json;
   }
 
+  get verbose(): boolean {
+    return this.options.verbose;
+  }
+
   print(value: unknown, human?: string): void {
     if (this.options.json) process.stdout.write(`${stringifyJson(value)}\n`);
     else if (human !== undefined) process.stdout.write(`${human}\n`);
@@ -28,6 +32,10 @@ export class Output {
       ...(error.details ? { details: redact(error.details) } : {}),
     };
     if (this.options.json) process.stderr.write(`${stringifyJson(payload)}\n`);
-    else process.stderr.write(`Error: ${error.message}\n`);
+    else {
+      process.stderr.write(`Error: ${error.message}\n`);
+      if (this.options.verbose && error.details !== undefined)
+        process.stderr.write(`Details: ${stringifyJson(error.details)}\n`);
+    }
   }
 }

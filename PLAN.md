@@ -7,9 +7,9 @@ Implement the v0.1 Solana-only wallet described in `docs/spec.md`, with an inter
 ## Current state
 
 - TypeScript/ESM application, lockfile, tests, Docker packaging, wrapper, workflow, and operational documentation are implemented.
-- Source build and offline unit tests pass.
-- The local Docker image build passes its in-image test/build/prune stages.
-- Docker PTY/mock-RPC E2E is present but not passing in this workspace because its Docker runtime exposes bind mounts as root-owned; the GitHub Actions workflow is the supported environment for that gate.
+- Source formatting, build, and offline unit tests pass.
+- The local Docker image build passed its in-image test/build/prune stages before the review fixes.
+- The Docker PTY/mock-RPC E2E is now a hard gate with PTY wallet import, signer unlock, completion, JSON config, and failure artifacts; it must be rerun by GitHub Actions because this workspace has no usable Docker daemon/bind-mount runtime.
 
 ## Milestones
 
@@ -19,7 +19,7 @@ Implement the v0.1 Solana-only wallet described in `docs/spec.md`, with an inter
 - [complete] Implement SOL/token transaction pipeline.
 - [complete] Implement native staking commands.
 - [complete] Add Docker image, wrapper, mock RPC, E2E tests, and CI.
-- [in progress] Run full validation and review the final diff; GitHub Docker E2E remains environment-dependent.
+- [in progress] Run the post-review GitHub workflow and inspect its Docker E2E and publish result.
 
 ## Decisions / constraints
 
@@ -30,10 +30,14 @@ Implement the v0.1 Solana-only wallet described in `docs/spec.md`, with an inter
 
 ## Validation
 
-- `npm test`: 12 offline unit tests passing.
+- `npm run format:check`: passing with Prettier 3.6.2.
+- `python3 -m black --check test/e2e`: passing with Black 25.1.0.
+- `npm test`: 18 offline unit tests passing across four files.
 - `npm run build`: passing.
 - `npm ci --dry-run --legacy-peer-deps`: passing.
 - `docker build --platform linux/amd64 -t sol-wallet:e2e .`: passing, including in-image tests/build and production dependency pruning.
 - Direct source TTY smoke test: shell boot, help, and clean exit passing.
 - Direct deterministic mock-RPC test: SOL dry-run and signed confirmation path passing.
-- Docker E2E: not completed locally because of bind-mount ownership behavior; run in GitHub Actions.
+- Direct non-TTY shell smoke test: piped `help`/`exit` exits 0; unknown flags exit 2.
+- Deterministic mock-RPC smoke test: JSON SOL dry-run parses as one object and confirms no passphrase/output leakage.
+- Docker E2E: pending the post-review GitHub Actions run because Docker is unavailable in this workspace.

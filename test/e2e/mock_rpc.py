@@ -56,6 +56,8 @@ class Handler(BaseHTTPRequestHandler):
             }
         elif method == "getFeeForMessage":
             result = {"context": {"slot": 100}, "value": 5000}
+        elif method == "getBlockHeight":
+            result = 150
         elif method == "simulateTransaction":
             result = {
                 "context": {"apiVersion": "fixture", "slot": 100},

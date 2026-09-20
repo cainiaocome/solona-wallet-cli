@@ -4,7 +4,7 @@ import {
   InsufficientBalanceError,
   RpcError,
 } from "../errors/errors.js";
-import { formatSol } from "../solana/amounts.js";
+import { formatSol, formatUnits } from "../solana/amounts.js";
 import { rpcRequest } from "../solana/rpc.js";
 import { getTokenAccounts } from "../solana/tokens.js";
 import { listValidators } from "../solana/validators.js";
@@ -79,7 +79,7 @@ export async function showTokenList(context: CommandContext): Promise<void> {
     ? accounts
         .map(
           (account) =>
-            `${account.mint}  ${account.program}  ${account.address}  ${account.uiAmount}`,
+            `${account.mint}  ${account.program}  ${account.address}  ${account.uiAmount}  decimals=${account.decimals} raw=${account.rawAmount}`,
         )
         .join("\n")
     : "No SPL or Token-2022 accounts found.";
@@ -117,7 +117,7 @@ export async function showTokenBalance(
     0n,
   );
   const decimals = matches[0]!.decimals;
-  const amount = matches[0]!.uiAmount;
+  const amount = formatUnits(rawAmount, decimals);
   context.output.print(
     { ok: true, address: wallet, mint, rawAmount, decimals, amount },
     `${amount} ${mint}`,

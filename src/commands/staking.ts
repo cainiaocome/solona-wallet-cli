@@ -1,4 +1,5 @@
 import {
+  AccountRole,
   appendTransactionMessageInstruction,
   address,
   compileTransaction,
@@ -9,6 +10,11 @@ import {
   setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners,
 } from "@solana/kit";
+import {
+  SYSVAR_CLOCK_ADDRESS,
+  SYSVAR_RENT_ADDRESS,
+  SYSVAR_STAKE_HISTORY_ADDRESS,
+} from "@solana/sysvars";
 import { getCreateAccountWithSeedInstruction } from "@solana-program/system";
 import {
   getDelegateStakeInstruction,
@@ -17,13 +23,21 @@ import {
   getWithdrawInstruction,
   STAKE_PROGRAM_ADDRESS,
 } from "@solana-program/stake";
-import { chmod, readFile, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
 import { stakeRegistryPath } from "../config/config.js";
 import {
-  ConfirmationError,
   InsufficientBalanceError,
   SimulationError,
   StakeAccountError,
+  TransactionRejectedError,
   ValidatorError,
   safeJson,
 } from "../errors/errors.js";
@@ -45,6 +59,27 @@ import type { CommandContext } from "./context.js";
 export const STAKE_ACCOUNT_SPACE = 200n;
 export const STAKE_STAKER_AUTHORITY_OFFSET = 12n;
 export const STAKE_WITHDRAW_AUTHORITY_OFFSET = 44n;
+const MAX_EPOCH = (1n << 64n) - 1n;
+export const STAKE_CONFIG_ADDRESS = address(
+  "StakeConfig11111111111111111111111111111111",
+);
+
+export function insertReadonlyAccounts(
+  instruction: { accounts: readonly unknown[] },
+  index: number,
+  addresses: readonly ReturnType<typeof address>[],
+): any {
+  const accounts = [...instruction.accounts];
+  accounts.splice(
+    index,
+    0,
+    ...addresses.map((accountAddress) => ({
+      address: accountAddress,
+      role: AccountRole.READONLY,
+    })),
+  );
+  return { ...instruction, accounts };
+}
 
 interface StakeRegistryEntry {
   address: string;
@@ -129,20 +164,32 @@ export async function stakeCreate(
       space: STAKE_ACCOUNT_SPACE,
       programAddress: STAKE_PROGRAM_ADDRESS,
     }),
-    getInitializeInstruction({
-      stake: stakeAccount,
-      arg0: { staker: owner, withdrawer: owner },
-      arg1: {
-        unixTimestamp: 0n,
-        epoch: 0n,
-        custodian: address("11111111111111111111111111111111"),
-      },
-    }),
-    getDelegateStakeInstruction({
-      stake: stakeAccount,
-      vote: validator.voteAccount as ReturnType<typeof parseAddress>,
-      stakeAuthority: signer,
-    }),
+    insertReadonlyAccounts(
+      getInitializeInstruction({
+        stake: stakeAccount,
+        arg0: { staker: owner, withdrawer: owner },
+        arg1: {
+          unixTimestamp: 0n,
+          epoch: 0n,
+          custodian: address("11111111111111111111111111111111"),
+        },
+      }),
+      1,
+      [SYSVAR_RENT_ADDRESS],
+    ),
+    insertReadonlyAccounts(
+      getDelegateStakeInstruction({
+        stake: stakeAccount,
+        vote: validator.voteAccount as ReturnType<typeof parseAddress>,
+        stakeAuthority: signer,
+      }),
+      2,
+      [
+        SYSVAR_CLOCK_ADDRESS,
+        SYSVAR_STAKE_HISTORY_ADDRESS,
+        STAKE_CONFIG_ADDRESS,
+      ],
+    ),
   ];
   let message: any = createTransactionMessage({ version: 0 });
   message = setTransactionMessageFeePayer(owner, message);
@@ -181,10 +228,11 @@ export async function stakeCreate(
     cluster: context.config.cluster,
     dryRun: hasFlag(command, "dry-run") || context.session.dryRun,
   };
-  context.output.print(
-    { ok: true, preflight: summary },
-    `Action:              Native SOL stake\nWallet:              ${owner}\nValidator vote acct: ${validator.voteAccount}\nValidator node:      ${validator.nodeIdentity}\nValidator commission: ${validator.commission}%\nEffective stake:     ${formatSol(requested)} SOL\nRent reserve:        ${formatSol(rentReserve)} SOL\nTotal moved:         ${formatSol(requested + rentReserve)} SOL\nNetwork fee:         ~${formatSol(fee)} SOL\nStake account:       ${stakeAccount}\nCluster:             ${context.config.cluster}`,
-  );
+  if (!context.output.json)
+    context.output.print(
+      { ok: true, preflight: summary },
+      `Action:              Native SOL stake\nWallet:              ${owner}\nValidator vote acct: ${validator.voteAccount}\nValidator node:      ${validator.nodeIdentity}\nValidator commission: ${validator.commission}%\nEffective stake:     ${formatSol(requested)} SOL\nRent reserve:        ${formatSol(rentReserve)} SOL\nTotal moved:         ${formatSol(requested + rentReserve)} SOL\nNetwork fee:         ~${formatSol(fee)} SOL\nStake account:       ${stakeAccount}\nCluster:             ${context.config.cluster}`,
+    );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
       encoding: "base64",
@@ -216,7 +264,7 @@ export async function stakeCreate(
       ))
     )
   )
-    throw new ConfirmationError("Transaction cancelled by user.");
+    throw new TransactionRejectedError();
   const signed = await signTransactionMessageWithSigners(message);
   const signature = await rpcRequest(
     rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
@@ -230,6 +278,7 @@ export async function stakeCreate(
     rpc,
     String(signature),
     context.config.commitment,
+    latest.value.lastValidBlockHeight,
   );
   await addRegistryEntry(context, {
     address: stakeAccount,
@@ -340,6 +389,10 @@ export async function stakeDeactivate(
   const info = await getControlledStake(context, stakeAccount, "staker");
   if (!info.delegated)
     throw new StakeAccountError("Stake account is not currently delegated.");
+  if (info.state !== "active")
+    throw new StakeAccountError(
+      `Stake account is already ${info.state}; deactivation is epoch-based and cannot be repeated.`,
+    );
   const signer = new EncryptedKeystoreSigner(
     context.config.configDir,
     owner,
@@ -348,14 +401,23 @@ export async function stakeDeactivate(
   await runStakeInstruction(
     context,
     command,
-    [getDeactivateInstruction({ stake: stakeAccount, stakeAuthority: signer })],
+    [
+      insertReadonlyAccounts(
+        getDeactivateInstruction({
+          stake: stakeAccount,
+          stakeAuthority: signer,
+        }),
+        1,
+        [SYSVAR_CLOCK_ADDRESS],
+      ),
+    ],
     {
       action: "Deactivate stake",
       stakeAccount,
       validatorVoteAccount: info.validatorVoteAccount,
       stakeLamports: info.stakeLamports,
     },
-    `Action:        Deactivate stake\nStake account: ${stakeAccount}\nValidator:     ${info.validatorVoteAccount}\nStake:         ${formatSol(info.stakeLamports)} SOL`,
+    `Action:        Deactivate stake\nStake account: ${stakeAccount}\nValidator:     ${info.validatorVoteAccount}\nStake:         ${formatSol(info.stakeLamports)} SOL\nDeactivation is epoch-based; funds will not be immediately withdrawable.`,
   );
 }
 
@@ -393,12 +455,16 @@ export async function stakeWithdraw(
     context,
     command,
     [
-      getWithdrawInstruction({
-        stake: stakeAccount,
-        recipient: owner,
-        withdrawAuthority: signer,
-        args: requested,
-      }) as any,
+      insertReadonlyAccounts(
+        getWithdrawInstruction({
+          stake: stakeAccount,
+          recipient: owner,
+          withdrawAuthority: signer,
+          args: requested,
+        }) as any,
+        2,
+        [SYSVAR_CLOCK_ADDRESS, SYSVAR_STAKE_HISTORY_ADDRESS],
+      ),
     ],
     {
       action: "Withdraw stake",
@@ -446,10 +512,11 @@ async function runStakeInstruction(
     cluster: context.config.cluster,
     dryRun: hasFlag(command, "dry-run") || context.session.dryRun,
   };
-  context.output.print(
-    { ok: true, preflight },
-    `${human}\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
-  );
+  if (!context.output.json)
+    context.output.print(
+      { ok: true, preflight },
+      `${human}\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
+    );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
       encoding: "base64",
@@ -481,7 +548,7 @@ async function runStakeInstruction(
       ))
     )
   )
-    throw new ConfirmationError("Transaction cancelled by user.");
+    throw new TransactionRejectedError();
   const signed = await signTransactionMessageWithSigners(message);
   const signature = await rpcRequest(
     rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
@@ -495,6 +562,7 @@ async function runStakeInstruction(
     rpc,
     String(signature),
     context.config.commitment,
+    latest.value.lastValidBlockHeight,
   );
   context.output.print(
     {
@@ -519,6 +587,7 @@ async function getControlledStake(
   lamports: bigint;
   withdrawableLamports: bigint;
   rentReserveLamports: bigint;
+  state: "active" | "deactivating" | "inactive";
 }> {
   const rpc = context.getClient().rpc;
   const response = await rpcRequest(
@@ -555,15 +624,22 @@ async function getControlledStake(
     lamports,
     withdrawableLamports,
     rentReserveLamports,
+    state,
   };
+}
+
+function normalizeDeactivationEpoch(value: unknown): bigint | undefined {
+  if (value === undefined || value === null) return undefined;
+  const epoch = BigInt(value as string | number | bigint);
+  return epoch >= MAX_EPOCH ? undefined : epoch;
 }
 
 async function currentStakeState(
   context: CommandContext,
   deactivationEpoch: unknown,
 ): Promise<"active" | "deactivating" | "inactive"> {
-  if (deactivationEpoch === undefined || deactivationEpoch === null)
-    return "active";
+  const normalized = normalizeDeactivationEpoch(deactivationEpoch);
+  if (normalized === undefined) return "active";
   const epoch = BigInt(
     (
       await rpcRequest(
@@ -574,9 +650,7 @@ async function currentStakeState(
       )
     ).epoch,
   );
-  return BigInt(deactivationEpoch as string | number | bigint) <= epoch
-    ? "inactive"
-    : "deactivating";
+  return normalized < epoch ? "inactive" : "deactivating";
 }
 
 function parseStakeAccount(
@@ -588,17 +662,22 @@ function parseStakeAccount(
   const info = value?.data?.parsed?.info;
   const lamports = BigInt(value?.lamports ?? 0);
   const delegation = info?.stake?.delegation;
-  const deactivationEpoch =
-    delegation?.deactivationEpoch === undefined
+  const activationEpoch =
+    delegation?.activationEpoch === undefined
       ? undefined
-      : BigInt(delegation.deactivationEpoch);
+      : BigInt(delegation.activationEpoch);
+  const deactivationEpoch = normalizeDeactivationEpoch(
+    delegation?.deactivationEpoch,
+  );
   const state = !delegation
     ? "inactive"
-    : deactivationEpoch !== undefined && deactivationEpoch <= currentEpoch
+    : deactivationEpoch !== undefined && deactivationEpoch < currentEpoch
       ? "inactive"
       : deactivationEpoch !== undefined
         ? "deactivating"
-        : "active";
+        : activationEpoch !== undefined && activationEpoch >= currentEpoch
+          ? "activating"
+          : "active";
   return {
     address: accountAddress,
     lamports,
@@ -607,10 +686,7 @@ function parseStakeAccount(
     validatorVoteAccount: String(delegation?.voterPubkey ?? "unknown"),
     stakerAuthority: String(info?.meta?.authorized?.staker ?? "unknown"),
     withdrawAuthority: String(info?.meta?.authorized?.withdrawer ?? "unknown"),
-    activationEpoch:
-      delegation?.activationEpoch === undefined
-        ? null
-        : BigInt(delegation.activationEpoch),
+    activationEpoch: activationEpoch ?? null,
     deactivationEpoch: deactivationEpoch ?? null,
     state,
   };
@@ -651,10 +727,18 @@ async function addRegistryEntry(
     ),
     entry,
   ];
-  await writeFile(
-    stakeRegistryPath(context.config.configDir),
-    `${JSON.stringify(registry, null, 2)}\n`,
-    { mode: 0o600 },
+  const target = stakeRegistryPath(context.config.configDir);
+  const temporaryDirectory = await mkdtemp(
+    path.join(path.dirname(target), ".stake-registry-"),
   );
-  await chmod(stakeRegistryPath(context.config.configDir), 0o600);
+  const temporaryPath = path.join(temporaryDirectory, "stake-accounts.json");
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(registry, null, 2)}\n`, {
+      mode: 0o600,
+    });
+    await chmod(temporaryPath, 0o600);
+    await rename(temporaryPath, target);
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }

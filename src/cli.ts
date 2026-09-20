@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { pathToFileURL } from "node:url";
 import { loadConfig, type ConfigOverrides } from "./config/config.js";
 import { clusterSchema, commitmentSchema } from "./config/schema.js";
 import { asAppError, ConfigError } from "./errors/errors.js";
@@ -61,8 +62,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       { dryRun: options.dryRun, yes: options.yes, verbose: options.verbose },
     );
     if (options.command !== undefined) {
-      const result = await executeLine(context, options.command);
-      return result.exit ? 0 : 0;
+      await executeLine(context, options.command);
+      return 0;
     }
     return await runRepl(context);
   } catch (error) {
@@ -80,6 +81,9 @@ function parseJsonFlag(argv: string[]): boolean {
   return argv.includes("--json");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   main().then((code) => (process.exitCode = code));
 }

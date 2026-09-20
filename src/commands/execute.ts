@@ -1,4 +1,5 @@
 import { address } from "@solana/kit";
+import { setSessionCluster } from "../config/config.js";
 import { AppError } from "../errors/errors.js";
 import { formatSol } from "../solana/amounts.js";
 import { rpcRequest } from "../solana/rpc.js";
@@ -68,10 +69,11 @@ export async function executeParsed(
   context: CommandContext,
   command: ParsedCommand,
 ): Promise<ExecutionResult> {
+  validateFlags(command);
   const previousOutput = context.output;
   context.output = new Output({
     json: previousOutput.json || hasFlag(command, "json"),
-    verbose: false,
+    verbose: previousOutput.verbose,
   });
   try {
     const name = command.name.toLowerCase();
@@ -132,7 +134,7 @@ export async function executeParsed(
           "validators [--limit <n>] [--current-only] [--max-commission <percent>]",
         );
         await showValidators(context, {
-          limit: parseOptionalInteger(flagValue(command, "limit"), "limit"),
+          limit: parseOptionalInteger(flagValue(command, "limit"), "limit", 1),
           currentOnly: hasFlag(command, "current-only"),
           maxCommission: parseOptionalNumber(
             flagValue(command, "max-commission"),
@@ -232,10 +234,10 @@ async function executeSet(
   const field = command.args[0];
   const value = command.args[1]!;
   if (field === "cluster" && (value === "mainnet-beta" || value === "devnet")) {
-    context.config.cluster = value;
+    setSessionCluster(context.config, value);
     context.output.print(
-      { ok: true, cluster: value },
-      `CLUSTER CHANGED TO ${value.toUpperCase()} (session only)`,
+      { ok: true, cluster: value, rpcUrl: context.config.rpcUrl },
+      `CLUSTER CHANGED TO ${value.toUpperCase()} (session only)\nRPC URL: ${context.config.rpcUrl}`,
     );
   } else if (field === "rpc-url") {
     try {
@@ -294,6 +296,7 @@ async function executeTx(
 function parseOptionalInteger(
   value: string | undefined,
   label: string,
+  minimum = 0,
 ): number | undefined {
   if (value === undefined) return undefined;
   if (!/^\d+$/.test(value))
@@ -305,6 +308,12 @@ function parseOptionalInteger(
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed))
     throw new AppError(`${label} is too large.`, "ParseError", 2);
+  if (parsed < minimum)
+    throw new AppError(
+      `${label} must be at least ${minimum}.`,
+      "ParseError",
+      2,
+    );
   return parsed;
 }
 
@@ -320,7 +329,7 @@ function parseOptionalNumber(
 }
 
 function unknownCommand(value: string): AppError {
-  const suggestion = TOP_LEVEL.sort(
+  const suggestion = [...TOP_LEVEL].sort(
     (a, b) => levenshtein(value, a) - levenshtein(value, b),
   )[0];
   const suffix =
@@ -328,6 +337,35 @@ function unknownCommand(value: string): AppError {
       ? `\nDid you mean: ${suggestion}?`
       : "";
   return new AppError(`Unknown command: ${value}${suffix}`, "ParseError", 2);
+}
+
+function validateFlags(command: ParsedCommand): void {
+  const name = command.name.toLowerCase();
+  const subcommand = command.args[0]?.toLowerCase();
+  const allowed = new Set(["json"]);
+  if (name === "send") {
+    allowed.add("dry-run");
+    allowed.add("yes");
+  } else if (name === "validators") {
+    allowed.add("limit");
+    allowed.add("current-only");
+    allowed.add("max-commission");
+  } else if (name === "wallet" && subcommand === "import") {
+    allowed.add("keypair-file");
+  } else if (name === "token" && subcommand === "send") {
+    allowed.add("dry-run");
+    allowed.add("yes");
+  } else if (name === "stake") {
+    if (subcommand === "create") allowed.add("validator");
+    if (subcommand === "withdraw") allowed.add("amount");
+    if (["create", "deactivate", "withdraw"].includes(subcommand ?? "")) {
+      allowed.add("dry-run");
+      allowed.add("yes");
+    }
+  }
+  for (const flag of command.flags.keys())
+    if (!allowed.has(flag))
+      throw new AppError(`Unknown flag: --${flag}`, "ParseError", 2);
 }
 
 function levenshtein(left: string, right: string): number {

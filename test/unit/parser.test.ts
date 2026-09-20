@@ -1,6 +1,13 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { completeLine } from "../../src/shell/completion.js";
-import { isSafeHistoryLine } from "../../src/shell/history.js";
+import {
+  appendHistory,
+  isSafeHistoryLine,
+  readHistory,
+} from "../../src/shell/history.js";
 import { parseCommand, tokenize } from "../../src/shell/parser.js";
 
 describe("wallet shell parser and completion", () => {
@@ -51,5 +58,21 @@ describe("wallet shell parser and completion", () => {
     expect(isSafeHistoryLine("balance")).toBe(true);
     expect(isSafeHistoryLine("wallet import --password nope")).toBe(false);
     expect(isSafeHistoryLine("")).toBe(false);
+  });
+
+  it("caps persisted history at the newest 1,000 safe entries", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-history-"),
+    );
+    try {
+      for (let index = 0; index < 1_005; index += 1)
+        await appendHistory(directory, `command-${index}`);
+      const entries = await readHistory(directory);
+      expect(entries).toHaveLength(1_000);
+      expect(entries[0]).toBe("command-5");
+      expect(entries.at(-1)).toBe("command-1004");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

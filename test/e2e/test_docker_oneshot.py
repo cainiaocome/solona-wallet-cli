@@ -90,6 +90,9 @@ class DockerOneShotTests(unittest.TestCase):
         destination = "11111111111111111111111111111112"
         result = self.run_wallet(f"send {destination} 1 --dry-run", json_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "simulated")
+        self.assertIn("preflight", payload)
         self.assertIn("simulateTransaction", Handler.state.methods)
         self.assertNotIn("sendTransaction", Handler.state.methods)
 
@@ -113,3 +116,10 @@ class DockerOneShotTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("correct horse", result.stdout + result.stderr)
+
+    def test_show_config_json_reports_the_fixture_endpoint(self):
+        result = self.run_wallet("show config", json_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["cluster"], "devnet")
+        self.assertEqual(payload["rpcUrl"], f"http://127.0.0.1:{self.port}")

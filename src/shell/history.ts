@@ -1,4 +1,13 @@
-import { appendFile, chmod, readFile } from "node:fs/promises";
+import {
+  appendFile,
+  chmod,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import path from "node:path";
 import { historyFilePath, ensureConfigDir } from "../config/config.js";
 
 const MAX_HISTORY = 1000;
@@ -25,8 +34,29 @@ export async function appendHistory(
 ): Promise<void> {
   if (!isSafeHistoryLine(line)) return;
   await ensureConfigDir(configDir);
-  await appendFile(historyFilePath(configDir), `${line.trim()}\n`, {
+  const target = historyFilePath(configDir);
+  await appendFile(target, `${line.trim()}\n`, {
     mode: 0o600,
   });
-  await chmod(historyFilePath(configDir), 0o600);
+  await chmod(target, 0o600);
+  const lines = (await readFile(target, "utf8"))
+    .split("\n")
+    .filter(isSafeHistoryLine);
+  if (lines.length <= MAX_HISTORY) return;
+
+  const temporaryDirectory = await mkdtemp(path.join(configDir, ".history-"));
+  const temporaryPath = path.join(temporaryDirectory, "history");
+  try {
+    await writeFile(
+      temporaryPath,
+      `${lines.slice(-MAX_HISTORY).join("\n")}\n`,
+      {
+        mode: 0o600,
+      },
+    );
+    await chmod(temporaryPath, 0o600);
+    await rename(temporaryPath, target);
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }

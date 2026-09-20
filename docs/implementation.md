@@ -15,6 +15,7 @@ The application is implemented as a strict ESM TypeScript CLI. The current v0.1 
 - SOL and SPL/Token-2022 read commands
 - SOL and basic token transfer builders with exact amounts, simulation, confirmation, broadcast, and confirmation polling
 - native Stake Program create/delegate, list, deactivate, and withdraw command paths
+- explicit positional Stake Program sysvar accounts, epoch-aware stake state, and atomic stake-registry updates
 - typed application errors and documented exit-code categories
 
 Jupiter Lend is not implemented. No v0.2 dependency or command should be added until the v0.1 Definition of Done in `docs/spec.md` is met.
@@ -28,7 +29,7 @@ The initial `npm install` exposed two environment details:
 
 The retry used exact stable versions published before the cutoff and `--legacy-peer-deps`; it completed successfully. Vitest then reported that its Vite peer was absent, so the exact stable `vite@8.3.0` package was added explicitly. The committed lockfile is the source of truth; normal builds use `npm ci` and do not need the troubleshooting command again. This incident does not affect wallet runtime behavior.
 
-The installed core stack is `@solana/kit@8.3.0`, `@solana-program/system@0.14.1`, `@solana-program/stake@0.9.1`, `@solana-program/token@0.16.1`, and `@solana-program/token-2022@0.17.0`. Core code does not import legacy `@solana/web3.js`.
+The installed core stack is `@solana/kit@8.3.0`, `@solana/sysvars@8.3.0`, `@solana-program/system@0.14.1`, `@solana-program/stake@0.9.1`, `@solana-program/token@0.16.1`, and `@solana-program/token-2022@0.17.0`. Core code does not import legacy `@solana/web3.js`.
 
 ## Source layout
 
@@ -64,11 +65,11 @@ All RPC clients are created from the session config and use the configured commi
 
 Token reads query both the legacy Token Program and Token-2022. Basic Token-2022 transfers use the checked instruction, but mints with extensions are refused because the transfer semantics need explicit support. No third-party token-list metadata is used.
 
-Native staking uses the official generated System and Stake clients. The stake create path is `CreateAccountWithSeed`, `Initialize`, and `DelegateStake`, with the wallet as both authorities and a blockhash-derived seed bounded to System Program seed length. Rent and minimum delegation are queried dynamically. Stake discovery makes two server-side `getProgramAccounts` queries, one for staker and one for withdrawer, rather than downloading and filtering all stake accounts locally.
+Native staking uses the official generated System and Stake clients. The stake create path is `CreateAccountWithSeed`, `Initialize`, and `DelegateStake`, with the wallet as both authorities and a blockhash-derived seed bounded to System Program seed length. Required Rent, Clock, StakeHistory, and StakeConfig accounts are inserted explicitly because the pinned generated Stake package does not model all builtin positional sysvars. Rent and minimum delegation are queried dynamically. Stake discovery makes two server-side `getProgramAccounts` queries, one for staker and one for withdrawer, rather than downloading and filtering all stake accounts locally. The `u64::MAX` deactivation sentinel is treated as active, and a deactivation epoch is complete only after the current epoch.
 
 ## History and completion safety
 
-History is capped at 1,000 entries, stored mode `0600`, and rejects lines containing private-key, secret-key, seed-phrase, mnemonic, password, or passphrase terms. Completion is memory-only public metadata: cached mints, known stake accounts, and recently inspected validator vote accounts. It never performs a network request synchronously, unlocks the keystore, signs, or broadcasts.
+History is capped at 1,000 persisted entries, stored mode `0600`, and rejects lines containing private-key, secret-key, seed-phrase, mnemonic, password, or passphrase terms. Completion is memory-only public metadata: cached mints, known stake accounts, and recently inspected validator vote accounts. It never performs a network request synchronously, unlocks the keystore, signs, or broadcasts. Unknown command flags are rejected instead of being silently ignored.
 
 ## Validation record
 
@@ -77,9 +78,10 @@ Run from the repository root:
 ```bash
 npm test
 npm run build
+npm run format:check
 ```
 
-The current offline suite covers exact decimal parsing, large bigint amounts, parser quoting and flags, command completion, history filtering, keystore round trips, wrong passwords, authenticated metadata tampering, atomic replacement refusal, file mode, and absence of plaintext key fields. Docker E2E is kept separate because it requires Docker and a PTY; it must be run against `SOL_WALLET_E2E_IMAGE`, never against `tsx` or the source tree.
+The current offline suite covers exact decimal parsing, large bigint amounts, parser quoting and flags, command completion, history filtering, keystore round trips, wrong passwords, authenticated metadata tampering, atomic replacement refusal, file mode, absence of plaintext key fields, Stake Program sysvar account order, and cluster/RPC session safety. Docker E2E is kept separate because it requires Docker and a PTY; it must be run against `SOL_WALLET_E2E_IMAGE`, never against `tsx` or the source tree. The workflow fails before publication if the image reference, Docker, pexpect, or any E2E test is missing, and uploads a method log plus image metadata on E2E failure.
 
 Before committing, TypeScript/JSON/Markdown/YAML changes are formatted with Prettier `3.6.2`, and the Python E2E harness is formatted with Black `25.1.0`; the repository rule for this is recorded in `AGENTS.md`.
 
@@ -91,7 +93,7 @@ Do not claim a devnet/mainnet write was tested unless an opt-in integration or m
 
 `Dockerfile` is multi-stage. The build stage runs `npm ci`, tests, and `npm run build`, then prunes development dependencies. The runtime stage contains `package.json`, production `node_modules`, and `dist` only, runs as `solwallet` (UID/GID `10001` by default), and starts directly at `dist/cli.js`. The documented mount is `/home/solwallet/.config/sol-wallet`; direct callers should pass their host UID/GID, while `scripts/sol-wallet` does that automatically.
 
-The intended CI order is source tests, `linux/amd64` image build, PTY/mock-RPC E2E against that exact tag, then GHCR authentication and push. Pushes to the repository's `main` or `master` branch and version tags trigger the workflow; pull requests never push. CI must not upload mounted wallet directories, passwords, private keys, or arbitrary logs.
+The intended CI order is formatting, source tests, `linux/amd64` image build, PTY/mock-RPC E2E against that exact tag, then GHCR authentication and push. Pushes to the repository's `main` or `master` branch and version tags trigger the workflow; pull requests never push. Version tags also publish the minor-series tag (for example `v0.1.0` publishes `0.1`). CI must not upload mounted wallet directories, passwords, private keys, or arbitrary logs.
 
 ## Known operational limits
 

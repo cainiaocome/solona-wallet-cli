@@ -20,6 +20,7 @@ import {
   SimulationError,
   UnsupportedTokenExtensionError,
   ConfirmationError,
+  TransactionRejectedError,
   RpcError,
   safeJson,
 } from "../errors/errors.js";
@@ -75,10 +76,25 @@ export async function sendToken(
     owner,
     context.config.commitment,
   );
-  const sourceAccount = accounts.find(
-    (account) => account.mint === mint && account.rawAmount >= rawAmount,
-  );
-  if (!sourceAccount)
+  const sourceAccounts: {
+    account: (typeof accounts)[number];
+    amount: bigint;
+  }[] = [];
+  let remaining = rawAmount;
+  for (const account of accounts) {
+    if (
+      account.mint !== mint ||
+      account.program !== mintInfo.program ||
+      account.rawAmount <= 0n
+    )
+      continue;
+    const amount =
+      account.rawAmount < remaining ? account.rawAmount : remaining;
+    sourceAccounts.push({ account, amount });
+    remaining -= amount;
+    if (remaining === 0n) break;
+  }
+  if (remaining > 0n)
     throw new InsufficientBalanceError(
       `Insufficient token balance for mint ${mint}.`,
     );
@@ -124,25 +140,27 @@ export async function sendToken(
       }),
     );
   }
-  const transfer =
-    mintInfo.program === "token-2022"
-      ? getToken2022TransferCheckedInstruction({
-          source: address(sourceAccount.address),
-          mint,
-          destination: destinationAta,
-          authority: signer,
-          amount: rawAmount,
-          decimals: mintInfo.decimals,
-        })
-      : getSplTransferCheckedInstruction({
-          source: address(sourceAccount.address),
-          mint,
-          destination: destinationAta,
-          authority: signer,
-          amount: rawAmount,
-          decimals: mintInfo.decimals,
-        });
-  instructions.push(transfer);
+  for (const { account, amount } of sourceAccounts) {
+    const transfer =
+      mintInfo.program === "token-2022"
+        ? getToken2022TransferCheckedInstruction({
+            source: address(account.address),
+            mint,
+            destination: destinationAta,
+            authority: signer,
+            amount,
+            decimals: mintInfo.decimals,
+          })
+        : getSplTransferCheckedInstruction({
+            source: address(account.address),
+            mint,
+            destination: destinationAta,
+            authority: signer,
+            amount,
+            decimals: mintInfo.decimals,
+          });
+    instructions.push(transfer);
+  }
   const latest = await rpcRequest(
     rpc.getLatestBlockhash({ commitment: context.config.commitment }),
     "recent blockhash lookup",
@@ -174,7 +192,7 @@ export async function sendToken(
     owner,
     mint,
     program: mintInfo.program,
-    sourceTokenAccount: sourceAccount.address,
+    sourceTokenAccounts: sourceAccounts.map(({ account }) => account.address),
     destinationOwner,
     destinationAta,
     rawAmount,
@@ -185,10 +203,11 @@ export async function sendToken(
     cluster: context.config.cluster,
     dryRun,
   };
-  context.output.print(
-    { ok: true, preflight: summary },
-    `Action:       Send token\nMint:         ${mint}\nRaw amount:   ${rawAmount}\nUI amount:    ${formatUnits(rawAmount, mintInfo.decimals)}\nDestination:  ${destinationOwner}\nDestination ATA: ${destinationAta}\nATA cost:     ${formatSol(ataCreationCost)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
-  );
+  if (!context.output.json)
+    context.output.print(
+      { ok: true, preflight: summary },
+      `Action:       Send token\nMint:         ${mint}\nRaw amount:   ${rawAmount}\nUI amount:    ${formatUnits(rawAmount, mintInfo.decimals)}\nDestination:  ${destinationOwner}\nDestination ATA: ${destinationAta}\nATA cost:     ${formatSol(ataCreationCost)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
+    );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
       encoding: "base64",
@@ -217,7 +236,7 @@ export async function sendToken(
         : "Submit this transaction?",
     ))
   )
-    throw new ConfirmationError("Transaction cancelled by user.");
+    throw new TransactionRejectedError();
   const signed = await signTransactionMessageWithSigners(message);
   const signature = await rpcRequest(
     rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
@@ -231,6 +250,7 @@ export async function sendToken(
     rpc,
     String(signature),
     context.config.commitment,
+    latest.value.lastValidBlockHeight,
   );
   context.output.print(
     {

@@ -14,6 +14,7 @@ import {
   SimulationError,
   ConfirmationError,
   InsufficientBalanceError,
+  TransactionRejectedError,
   safeJson,
 } from "../errors/errors.js";
 import { formatSol, parseSol } from "../solana/amounts.js";
@@ -84,7 +85,8 @@ export async function sendSol(
     dryRun,
   };
   const human = `Action:       Send SOL\nFrom:         ${source}\nTo:           ${destination}\nAmount:       ${formatSol(lamports)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`;
-  context.output.print({ ok: true, preflight: summary }, human);
+  if (!context.output.json)
+    context.output.print({ ok: true, preflight: summary }, human);
 
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
@@ -114,7 +116,7 @@ export async function sendSol(
         : "Submit this transaction?",
     ))
   )
-    throw new ConfirmationError("Transaction cancelled by user.");
+    throw new TransactionRejectedError();
   const signed = await signTransactionMessageWithSigners(message);
   const signature = await rpcRequest(
     rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
@@ -128,6 +130,7 @@ export async function sendSol(
     rpc,
     String(signature),
     context.config.commitment,
+    latest.value.lastValidBlockHeight,
   );
   context.output.print(
     {
@@ -144,11 +147,23 @@ export async function confirmSignature(
   rpc: ReturnType<CommandContext["getClient"]>["rpc"],
   signature: string,
   commitment: "processed" | "confirmed" | "finalized",
+  lastValidBlockHeight?: bigint,
 ): Promise<{
   slot: bigint;
   confirmationStatus: "processed" | "confirmed" | "finalized";
 }> {
   for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (lastValidBlockHeight !== undefined && attempt % 5 === 0) {
+      const blockHeight = await rpcRequest(
+        rpc.getBlockHeight({ commitment }),
+        "block height lookup",
+      );
+      if (BigInt(blockHeight as bigint) > lastValidBlockHeight)
+        throw new ConfirmationError(
+          `Transaction blockhash expired before confirmation. Query signature ${signature} before retrying.`,
+          { signature },
+        );
+    }
     const response = await rpcRequest(
       rpc.getSignatureStatuses([signature as never], {
         searchTransactionHistory: true,

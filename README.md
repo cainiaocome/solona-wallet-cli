@@ -31,10 +31,11 @@ Set `SOL_WALLET_IMAGE` or `SOL_WALLET_CONFIG_DIR` to override the wrapper defaul
 npm install
 npm test
 npm run build
+npm run format:check
 npm run dev
 ```
 
-The code was tested with these exact stable dependency versions in the current lockfile: `@solana/kit 8.3.0`, `@solana-program/system 0.14.1`, `@solana-program/stake 0.9.1`, `@solana-program/token 0.16.1`, `@solana-program/token-2022 0.17.0`, Node `>=24`, TypeScript `7.0.2`, Vitest `5.0.0`, and Vite `8.3.0`.
+The code was tested with these exact stable dependency versions in the current lockfile: `@solana/kit 8.3.0`, `@solana/sysvars 8.3.0`, `@solana-program/system 0.14.1`, `@solana-program/stake 0.9.1`, `@solana-program/token 0.16.1`, `@solana-program/token-2022 0.17.0`, Node `>=24`, TypeScript `7.0.2`, Vitest `5.0.0`, Vite `8.3.0`, and Prettier `3.6.2`.
 
 ## First use
 

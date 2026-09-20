@@ -4,6 +4,11 @@ set -euo pipefail
 IMAGE="${SOL_WALLET_IMAGE:-ghcr.io/<owner>/sol-wallet:latest}"
 CONFIG_DIR="${SOL_WALLET_CONFIG_DIR:-$HOME/.config/sol-wallet}"
 
+if [[ "$IMAGE" == *"<owner>"* ]]; then
+  echo "Set SOL_WALLET_IMAGE to a published ghcr.io image before using the wrapper." >&2
+  exit 2
+fi
+
 mkdir -p "$CONFIG_DIR"
 
 TTY_ARGS=()
