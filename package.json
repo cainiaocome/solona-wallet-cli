@@ -1,0 +1,43 @@
+{
+  "name": "solana-wallet-cli",
+  "version": "0.1.0",
+  "description": "A small, security-conscious Solana wallet CLI",
+  "type": "module",
+  "bin": {
+    "sol-wallet": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "2.2.1",
+    "@solana-program/stake": "0.9.1",
+    "@solana-program/system": "0.14.1",
+    "@solana-program/token": "0.16.1",
+    "@solana-program/token-2022": "0.17.0",
+    "@solana/kit": "8.3.0",
+    "bs58": "6.0.0",
+    "dotenv": "17.4.2",
+    "zod": "4.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.5.1",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0",
+    "vite": "8.3.0"
+  }
+}

@@ -1,0 +1,6 @@
+docs/spec.md
+Dockerfile
+.dockerignore
+.env.example
+scripts/sol-wallet
+test/e2e/*.py

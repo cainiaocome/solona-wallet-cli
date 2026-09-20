@@ -1,0 +1,12 @@
+.git
+.git-crypt
+.github
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+tmp
+test/e2e/.artifacts
+*.log

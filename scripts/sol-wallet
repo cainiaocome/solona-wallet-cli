@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+IMAGE="${SOL_WALLET_IMAGE:-ghcr.io/<owner>/sol-wallet:latest}"
+CONFIG_DIR="${SOL_WALLET_CONFIG_DIR:-$HOME/.config/sol-wallet}"
+
+mkdir -p "$CONFIG_DIR"
+
+TTY_ARGS=()
+if [[ -t 0 && -t 1 ]]; then
+  TTY_ARGS=(-it)
+else
+  TTY_ARGS=(-i)
+fi
+
+# Match the mounted directory's host ownership. The image's default UID is
+# 10001 for direct use; the wrapper uses the caller's UID/GID for 0700 mounts.
+USER_ARGS=(--user "$(id -u):$(id -g)")
+
+exec docker run --rm \
+  "${TTY_ARGS[@]}" \
+  "${USER_ARGS[@]}" \
+  -v "$CONFIG_DIR:/home/solwallet/.config/sol-wallet" \
+  "$IMAGE" \
+  "$@"

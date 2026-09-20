@@ -1,0 +1,56 @@
+name: Docker
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-test-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm test
+      - run: npm run build
+      - run: docker build --platform linux/amd64 -t sol-wallet:e2e .
+      - name: Run Docker E2E against the exact image
+        env:
+          SOL_WALLET_E2E_IMAGE: sol-wallet:e2e
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-cache-dir pexpect
+          python3 -m unittest discover -s test/e2e -p 'test_*.py'
+
+      - name: Authenticate to GHCR after all gates pass
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push the exact E2E-tested image
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/sol-wallet
+        run: |
+          docker tag sol-wallet:e2e "$IMAGE:sha-${GITHUB_SHA::7}"
+          docker tag sol-wallet:e2e "$IMAGE:latest"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            docker tag sol-wallet:e2e "$IMAGE:${GITHUB_REF_NAME}"
+            docker tag sol-wallet:e2e "$IMAGE:${GITHUB_REF_NAME#v}"
+          fi
+          docker push "$IMAGE:sha-${GITHUB_SHA::7}"
+          docker push "$IMAGE:latest"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            docker push "$IMAGE:${GITHUB_REF_NAME}"
+            docker push "$IMAGE:${GITHUB_REF_NAME#v}"
+          fi
