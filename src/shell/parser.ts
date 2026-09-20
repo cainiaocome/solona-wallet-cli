@@ -1,5 +1,12 @@
 import { AppError } from "../errors/errors.js";
 
+/**
+ * Shared command grammar for the REPL and `-c` mode.
+ *
+ * Tokenization is intentionally small and deterministic: quoted arguments and
+ * `--flag=value` are supported, but the input is never passed to a shell. That
+ * prevents command text from becoming an accidental operating-system command.
+ */
 export interface ParsedCommand {
   name: string;
   args: string[];

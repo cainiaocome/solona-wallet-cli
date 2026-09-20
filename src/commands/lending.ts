@@ -38,6 +38,14 @@ import { rpcRequest } from "../solana/rpc.js";
 import { hasFlag, type ParsedCommand } from "../shell/parser.js";
 import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 
+/**
+ * Jupiter Lend command layer.
+ *
+ * This layer owns user-facing safety decisions: amounts are parsed as exact
+ * USDC base units and all writes go through the common
+ * simulation/confirmation/sign/broadcast lifecycle. The adapter owns mainnet
+ * and canonical-asset checks plus official Jupiter SDK translation.
+ */
 export async function lendStatus(context: CommandContext): Promise<void> {
   const adapter = createAdapter(context);
   const owner = await requireWallet(context);

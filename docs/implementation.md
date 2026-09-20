@@ -1,6 +1,6 @@
 # Implementation and operations guide
 
-This document records how the repository implements the supplied v0.1 specification plus the narrowly-scoped v0.2 Jupiter Lend Earn extension. It is intentionally operational: it explains the boundaries a future contributor must preserve, the validation that has actually run, and the environment-specific issues encountered while bootstrapping dependencies.
+This document records how the repository implements the supplied v0.1 specification plus the narrowly-scoped v0.2 Jupiter Lend Earn extension. It is intentionally operational: it explains the boundaries a future contributor must preserve, the validation that has actually run, and the environment-specific issues encountered while bootstrapping dependencies. For a first introduction, use the [documentation map](README.md) and [getting-started guide](getting-started.md) first.
 
 ## Status
 

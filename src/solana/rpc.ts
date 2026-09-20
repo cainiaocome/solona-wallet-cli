@@ -2,6 +2,13 @@ import { createSolanaRpc } from "@solana/kit";
 import type { AppConfig } from "../config/config.js";
 import { RpcError } from "../errors/errors.js";
 
+/**
+ * Small RPC boundary shared by command handlers.
+ *
+ * The Kit client returns lazy request objects whose `.send()` performs the
+ * network call. Converting failures here gives every handler the same typed
+ * `RpcError` and prevents raw provider errors from leaking into user output.
+ */
 export type SolanaRpc = ReturnType<typeof createSolanaRpc>;
 
 export function createRpc(config: AppConfig): SolanaRpc {

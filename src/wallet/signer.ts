@@ -9,6 +9,13 @@ import type {
 import { address, createKeyPairSignerFromBytes } from "@solana/kit";
 import { readKeystore, unlockAndValidate } from "./keystore.js";
 
+/**
+ * Lazy signer for the encrypted local wallet.
+ *
+ * Constructing this object is safe: it stores only the public address. The
+ * passphrase is requested and the key is decrypted only when Kit asks the
+ * signer to sign a fully prepared transaction.
+ */
 export type PassphraseReader = () => Promise<string>;
 
 export class EncryptedKeystoreSigner implements TransactionPartialSigner {

@@ -1,5 +1,12 @@
 import { InvalidAmountError } from "../errors/errors.js";
 
+/**
+ * Amounts in this module are integer base units, never floating-point values.
+ *
+ * Solana stores SOL as lamports and tokens as mint-specific base units. Parsing
+ * the user's decimal string once at the boundary prevents rounding errors from
+ * leaking into transaction instructions or balance comparisons.
+ */
 export const LAMPORTS_PER_SOL = 1_000_000_000n;
 
 export function parseDecimalUnits(

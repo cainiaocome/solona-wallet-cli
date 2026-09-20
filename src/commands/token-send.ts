@@ -41,6 +41,13 @@ import { requireWallet } from "./read-only.js";
 import type { CommandContext } from "./context.js";
 import { confirmSignature } from "./send.js";
 
+/**
+ * SPL/Token-2022 transfer handler.
+ *
+ * A token amount is meaningful only together with its mint's decimals and
+ * token program. This module reads that metadata first, derives the relevant
+ * associated token accounts, and then uses a checked transfer instruction.
+ */
 export async function sendToken(
   context: CommandContext,
   mintValue: string,

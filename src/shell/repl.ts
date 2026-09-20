@@ -7,6 +7,12 @@ import { appendHistory, readHistory } from "./history.js";
 import { shortenAddress } from "../output/human.js";
 import { getWalletAddress } from "../wallet/signer.js";
 
+/**
+ * Interactive shell and piped-command runner.
+ *
+ * The readline interface is closed before a handler asks for a hidden secret
+ * or confirmation. This avoids two readers competing for the same terminal.
+ */
 export async function runRepl(context: CommandContext): Promise<number> {
   process.stdout.write("Solana Wallet CLI\n");
   process.stdout.write("Type `help` for commands.\n\n");

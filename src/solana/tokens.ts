@@ -5,6 +5,13 @@ import { RpcError } from "../errors/errors.js";
 import { formatUnits } from "./amounts.js";
 import { rpcRequest, type SolanaRpc } from "./rpc.js";
 
+/**
+ * Token read helpers understand both Solana token programs.
+ *
+ * A mint address alone is not enough to interpret a token balance: the mint's
+ * decimals and owning token program are also required. The parser converts
+ * RPC's JSON-shaped data into checked values used by commands and output.
+ */
 export const TOKEN_PROGRAM_ADDRESS = GENERATED_TOKEN_PROGRAM_ADDRESS;
 export const TOKEN_2022_PROGRAM_ADDRESS = GENERATED_TOKEN_2022_PROGRAM_ADDRESS;
 

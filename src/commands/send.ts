@@ -24,6 +24,14 @@ import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 import { requireWallet } from "./read-only.js";
 import type { CommandContext } from "./context.js";
 
+/**
+ * SOL transfer command.
+ *
+ * The important security property is the order of operations in this module:
+ * build and simulate first, ask for confirmation second, unlock/sign third,
+ * and broadcast last. The same shape is reused by token, stake, and lending
+ * commands so a feature cannot accidentally sign before preflight.
+ */
 export async function sendSol(
   context: CommandContext,
   destinationValue: string,

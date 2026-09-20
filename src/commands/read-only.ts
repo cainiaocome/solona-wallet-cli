@@ -12,6 +12,14 @@ import { getWalletAddress } from "../wallet/signer.js";
 import { readHistory } from "../shell/history.js";
 import type { CommandContext } from "./context.js";
 
+/**
+ * Public-data command handlers.
+ *
+ * These functions may use the wallet address from keystore metadata, but they
+ * must not unlock the encrypted secret. Keeping reads separate from the signer
+ * path makes commands such as `address`, `balance`, and `lend status` safe to
+ * run while inspecting a new machine or RPC endpoint.
+ */
 export async function requireWallet(context: CommandContext): Promise<Address> {
   const wallet = await getWalletAddress(context.config.configDir);
   if (!wallet)

@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+
+/**
+ * Process entry point.
+ *
+ * This file intentionally does very little feature work. It translates startup
+ * flags into configuration, creates the shared command context, then chooses
+ * between one-shot (`-c`) and interactive shell execution. Keeping the top
+ * level small makes it harder for a new feature to bypass the normal parser,
+ * output, or error handling paths.
+ */
 import { pathToFileURL } from "node:url";
 import { loadConfig, type ConfigOverrides } from "./config/config.js";
 import { clusterSchema, commitmentSchema } from "./config/schema.js";

@@ -121,4 +121,4 @@ npm test
 
 Opt-in Solana integration tests use `RUN_SOLANA_INTEGRATION=1` and must never use a real developer wallet. Docker E2E tests exercise the built image through a PTY and deterministic mock RPC; set `SOL_WALLET_E2E_IMAGE` to the image under test.
 
-See [docs/implementation.md](docs/implementation.md) and [docs/jupiter-lend.md](docs/jupiter-lend.md) for the architecture, v0.2 safety boundary, validation record, dependency-install incident, Docker workflow, and operational notes.
+Beginner-friendly documentation is indexed in [docs/README.md](docs/README.md). Start with [docs/getting-started.md](docs/getting-started.md), then read [docs/web3-concepts.md](docs/web3-concepts.md) and [docs/command-cookbook.md](docs/command-cookbook.md). The deeper references are [docs/architecture.md](docs/architecture.md), [docs/security-and-testing.md](docs/security-and-testing.md), [docs/implementation.md](docs/implementation.md), and [docs/jupiter-lend.md](docs/jupiter-lend.md).

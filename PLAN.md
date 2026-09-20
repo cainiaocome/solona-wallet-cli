@@ -9,6 +9,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - TypeScript/ESM application, lockfile, tests, Docker packaging, wrapper, workflow, and operational documentation are implemented.
 - v0.1 is complete and published through the verified Docker/GHCR workflow.
 - v0.2 Jupiter Lend adapter, commands, unit coverage, and documentation are implemented and published.
+- Beginner documentation, command examples, architecture notes, security guidance, and source-level explanatory comments are now maintained under `docs/` and the main Web3 boundaries in `src/`.
 - Source formatting, build, and offline unit tests pass.
 - The local Docker image build passed its in-image test/build/prune stages before the review fixes.
 - The Docker PTY/mock-RPC E2E is now a hard gate with PTY wallet import, signer unlock, completion, JSON config, and failure artifacts; it must be rerun by GitHub Actions because this workspace has no usable Docker daemon/bind-mount runtime.
@@ -26,6 +27,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - [complete] Implement mainnet canonical-USDC `lend status`, `deposit`, `withdraw`, and `withdraw --all`.
 - [complete] Add v0.2 unit tests and operational/dependency-risk documentation.
 - [complete] Run v0.2 full validation and GitHub Docker workflow.
+- [complete] Expand beginner documentation and annotate the Web3/security boundaries in source code.
 
 ## Decisions / constraints
 
@@ -52,3 +54,4 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Deterministic mock-RPC smoke test: JSON SOL dry-run parses as one object and confirms no passphrase/output leakage.
 - v0.2 command smoke tests: help/completion expose `lend`; devnet lending is rejected before wallet/network use after the mainnet guard.
 - Docker E2E: post-review GitHub Actions run 35482612396 passed all 9 image tests and published the exact tested image; Docker remains unavailable in this workspace.
+- Documentation-only follow-up validation passes: Prettier, Black, 23 unit tests, TypeScript lint, build, and `git diff --check`.

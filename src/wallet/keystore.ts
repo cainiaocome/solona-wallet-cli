@@ -12,6 +12,15 @@ import { z } from "zod";
 import { InvalidPrivateKeyError, KeystoreError } from "../errors/errors.js";
 import { keystoreFilePath } from "../config/config.js";
 
+/**
+ * Local encrypted-key boundary.
+ *
+ * The rest of the application should see a public address or a signer, not a
+ * plaintext secret key. This module normalizes accepted Solana key formats,
+ * encrypts the expanded 64-byte key, validates authenticated metadata, and
+ * performs atomic file writes so an interrupted import does not leave a
+ * half-written keystore.
+ */
 export const KDF_DEFAULTS = {
   name: "argon2id" as const,
   memoryKiB: 65_536,

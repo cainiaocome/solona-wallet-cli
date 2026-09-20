@@ -37,6 +37,14 @@ import {
   stakeWithdraw,
 } from "./staking.js";
 
+/**
+ * Central command dispatcher used by both interactive and one-shot commands.
+ *
+ * Validation belongs before the feature handlers: a handler should receive a
+ * well-shaped command and then focus on Solana/protocol behavior. Write
+ * handlers still perform their own domain validation, because an argument can
+ * be syntactically valid and financially unsafe.
+ */
 export interface ExecutionResult {
   exit: boolean;
 }

@@ -52,6 +52,14 @@ import { requireWallet } from "./read-only.js";
 import { confirmSignature } from "./send.js";
 import type { CommandContext } from "./context.js";
 
+/**
+ * Native Stake Program commands.
+ *
+ * Native staking creates a real Solana stake account and follows epoch-based
+ * activation/deactivation rules. This is deliberately kept separate from
+ * liquid staking and from Jupiter Lend: those products have different
+ * accounts, programs, and withdrawal semantics.
+ */
 // Solana's canonical StakeStateV2 layout stores Meta.authorized.staker at byte 12
 // and Meta.authorized.withdrawer at byte 44 (4-byte enum + 8-byte reserve + pubkeys).
 // These are named and tested filters, matching the upstream StakeStateV2 Rust layout;

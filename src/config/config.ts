@@ -12,6 +12,13 @@ import {
   type Commitment,
 } from "./schema.js";
 
+/**
+ * Runtime configuration is deliberately non-secret.
+ *
+ * This module resolves the network, RPC endpoint, commitment, and local state
+ * directory. Private keys and passphrases never belong in this precedence
+ * chain; they are handled only by the wallet/keystore modules.
+ */
 export interface AppConfig {
   cluster: Cluster;
   rpcUrl: string;

@@ -22,6 +22,19 @@ import type { AppConfig } from "../../config/config.js";
 import { JupiterLendError } from "../../errors/errors.js";
 import { formatUnits } from "../../solana/amounts.js";
 
+/**
+ * Compatibility boundary for the pinned Jupiter Earn SDK.
+ *
+ * The wallet core uses `@solana/kit`, while this SDK line uses legacy
+ * `@solana/web3.js`, `PublicKey`, and `BN` values. Keep those types here and
+ * convert the official SDK instructions into the small Kit-shaped structure
+ * consumed by the common transaction pipeline. This prevents protocol SDK
+ * details from spreading through the wallet.
+ *
+ * The adapter also owns v0.2's identity checks: mainnet only, canonical USDC,
+ * legacy SPL Token Program, six decimals, and withdrawal bounded by both the
+ * user's position and protocol-reported liquidity.
+ */
 export const JUPITER_LEND_USDC_MINT =
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" as Address;
 export const JUPITER_LEND_USDC_DECIMALS = 6;

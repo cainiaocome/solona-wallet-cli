@@ -1,6 +1,13 @@
 import { stringifyJson } from "./json.js";
 import { redact, type AppError } from "../errors/errors.js";
 
+/**
+ * Output boundary shared by all commands.
+ *
+ * Human output is for people at a terminal; JSON output is for scripts. Keeping
+ * the choice here prevents handlers from accidentally mixing logs with a JSON
+ * document and keeps error output on stderr.
+ */
 export interface OutputOptions {
   json: boolean;
   verbose: boolean;
