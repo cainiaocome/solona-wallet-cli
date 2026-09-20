@@ -52,6 +52,13 @@ describe("wallet shell parser and completion", () => {
         recentValidators: [],
       })[0],
     ).toEqual(["create", "list", "deactivate", "withdraw"]);
+    expect(
+      completeLine("lend ", {
+        tokenMints: [],
+        stakeAccounts: [],
+        recentValidators: [],
+      })[0],
+    ).toEqual(["status", "deposit", "withdraw"]);
   });
 
   it("filters secret-looking lines from history", () => {

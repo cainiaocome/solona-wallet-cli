@@ -29,6 +29,7 @@ import {
 } from "./read-only.js";
 import { sendSol } from "./send.js";
 import { sendToken } from "./token-send.js";
+import { lendDeposit, lendStatus, lendWithdraw } from "./lending.js";
 import {
   stakeCreate,
   stakeDeactivate,
@@ -49,6 +50,7 @@ const TOP_LEVEL = [
   "token",
   "validators",
   "stake",
+  "lend",
   "tx",
   "set",
   "show",
@@ -168,6 +170,8 @@ export async function executeParsed(
         return executeTx(context, command);
       case "stake":
         return executeStake(context, command);
+      case "lend":
+        return executeLend(context, command);
       default:
         throw unknownCommand(command.name);
     }
@@ -219,6 +223,24 @@ async function executeToken(
       hasFlag(command, "yes") || context.session.yes,
     );
   } else throw unknownCommand(`token ${subcommand ?? ""}`.trim());
+  return { exit: false };
+}
+
+async function executeLend(
+  context: CommandContext,
+  command: ParsedCommand,
+): Promise<ExecutionResult> {
+  const subcommand = command.args[0];
+  const args = { ...command, args: command.args.slice(1) };
+  if (subcommand === "status") {
+    rejectExtraArgs(args, 0, "lend status");
+    await lendStatus(context);
+  } else if (subcommand === "deposit") {
+    rejectExtraArgs(args, 1, "lend deposit <amount> [--dry-run] [--yes]");
+    await lendDeposit(context, args);
+  } else if (subcommand === "withdraw") {
+    await lendWithdraw(context, args);
+  } else throw unknownCommand(`lend ${subcommand ?? ""}`.trim());
   return { exit: false };
 }
 
@@ -355,6 +377,12 @@ function validateFlags(command: ParsedCommand): void {
   } else if (name === "token" && subcommand === "send") {
     allowed.add("dry-run");
     allowed.add("yes");
+  } else if (name === "lend") {
+    if (subcommand === "deposit" || subcommand === "withdraw") {
+      allowed.add("dry-run");
+      allowed.add("yes");
+    }
+    if (subcommand === "withdraw") allowed.add("all");
   } else if (name === "stake") {
     if (subcommand === "create") allowed.add("validator");
     if (subcommand === "withdraw") allowed.add("amount");

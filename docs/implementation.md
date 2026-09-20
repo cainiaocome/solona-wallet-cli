@@ -1,10 +1,10 @@
 # Implementation and operations guide
 
-This document records how the repository implements the supplied v0.1 specification. It is intentionally operational: it explains the boundaries a future contributor must preserve, the validation that has actually run, and the environment-specific issues encountered while bootstrapping dependencies.
+This document records how the repository implements the supplied v0.1 specification plus the narrowly-scoped v0.2 Jupiter Lend Earn extension. It is intentionally operational: it explains the boundaries a future contributor must preserve, the validation that has actually run, and the environment-specific issues encountered while bootstrapping dependencies.
 
 ## Status
 
-The application is implemented as a strict ESM TypeScript CLI. The current v0.1 implementation includes:
+The application is implemented as a strict ESM TypeScript CLI. The current v0.2 implementation includes:
 
 - one-wallet encrypted local keystore with address-only public reads
 - hidden import/passphrase prompts and Solana CLI JSON keypair input
@@ -16,9 +16,11 @@ The application is implemented as a strict ESM TypeScript CLI. The current v0.1 
 - SOL and basic token transfer builders with exact amounts, simulation, confirmation, broadcast, and confirmation polling
 - native Stake Program create/delegate, list, deactivate, and withdraw command paths
 - explicit positional Stake Program sysvar accounts, epoch-aware stake state, and atomic stake-registry updates
+- isolated Jupiter Lend Earn USDC status, deposit, withdraw, and withdraw-all commands
+- canonical mainnet USDC verification, official SDK instruction adaptation, protocol-reported withdrawability, and common transaction safety
 - typed application errors and documented exit-code categories
 
-Jupiter Lend is not implemented. No v0.2 dependency or command should be added until the v0.1 Definition of Done in `docs/spec.md` is met.
+Jupiter Borrow, collateral positions, arbitrary lending assets, leverage, liquidations, and arbitrary Jupiter transaction signing remain out of scope.
 
 ## Dependency bootstrap record
 
@@ -29,11 +31,11 @@ The initial `npm install` exposed two environment details:
 
 The retry used exact stable versions published before the cutoff and `--legacy-peer-deps`; it completed successfully. Vitest then reported that its Vite peer was absent, so the exact stable `vite@8.3.0` package was added explicitly. The committed lockfile is the source of truth; normal builds use `npm ci` and do not need the troubleshooting command again. This incident does not affect wallet runtime behavior.
 
-The installed core stack is `@solana/kit@8.3.0`, `@solana/sysvars@8.3.0`, `@solana-program/system@0.14.1`, `@solana-program/stake@0.9.1`, `@solana-program/token@0.16.1`, and `@solana-program/token-2022@0.17.0`. Core code does not import legacy `@solana/web3.js`.
+The installed core stack is `@solana/kit@8.3.0`, `@solana/sysvars@8.3.0`, `@solana-program/system@0.14.1`, `@solana-program/stake@0.9.1`, `@solana-program/token@0.16.1`, and `@solana-program/token-2022@0.17.0`. The v0.2 adapter additionally uses `@jup-ag/lend@0.0.108`, `@jup-ag/lend-read@0.0.14`, `@solana/web3.js`, and `bn.js` only under `src/integrations/jupiter-lend/`; core wallet code does not import legacy `@solana/web3.js`.
 
 ## Source layout
 
-`src/cli.ts` parses only startup flags and chooses one-shot or REPL execution. `src/shell/` owns tokenization, command completion, history filtering, help, hidden prompts, and readline. `src/commands/` contains user-facing handlers. `src/config/` handles precedence and permissions. `src/wallet/` is the only layer that reads or decrypts key material. `src/solana/` contains Kit RPC access, exact amounts, token decoding, validators, and transaction/stake helpers. `src/output/` separates JSON and human output.
+`src/cli.ts` parses only startup flags and chooses one-shot or REPL execution. `src/shell/` owns tokenization, command completion, history filtering, help, hidden prompts, and readline. `src/commands/` contains user-facing handlers. `src/config/` handles precedence and permissions. `src/wallet/` is the only layer that reads or decrypts key material. `src/solana/` contains Kit RPC access, exact amounts, token decoding, validators, and transaction/stake helpers. `src/integrations/jupiter-lend/` is the only boundary that imports Jupiter's legacy web3 SDKs and converts their instructions. `src/output/` separates JSON and human output.
 
 The command flow is:
 
@@ -50,6 +52,8 @@ readline or -c text
 ```
 
 Read-only address, balance, token, validator, and stake-list commands use the public keystore metadata and never invoke the signer. The `EncryptedKeystoreSigner` decrypts only from its `signTransactions` boundary; transaction handlers cannot call a `getPrivateKey()` method.
+
+`lend status` follows the same read-only rule. It uses `@jup-ag/lend-read` with the public wallet address and reports the SDK's supplied, withdrawable, receipt-share, and raw rate fields. Lend writes use `@jup-ag/lend` only to construct explicit Earn instructions, then convert them into the common Kit message and signer pipeline.
 
 ## Keystore format and recovery behavior
 
@@ -81,7 +85,7 @@ npm run build
 npm run format:check
 ```
 
-The current offline suite covers exact decimal parsing, large bigint amounts, parser quoting and flags, command completion, history filtering, keystore round trips, wrong passwords, authenticated metadata tampering, atomic replacement refusal, file mode, absence of plaintext key fields, Stake Program sysvar account order, and cluster/RPC session safety. Docker E2E is kept separate because it requires Docker and a PTY; it must be run against `SOL_WALLET_E2E_IMAGE`, never against `tsx` or the source tree. The workflow fails before publication if the image reference, Docker, pexpect, or any E2E test is missing, and uploads a method log plus image metadata on E2E failure.
+The current offline suite covers exact decimal parsing, large bigint amounts, parser quoting and flags, command completion, history filtering, keystore round trips, wrong passwords, authenticated metadata tampering, atomic replacement refusal, file mode, absence of plaintext key fields, Stake Program sysvar account order, cluster/RPC session safety, exact USDC conversion, mainnet-only lending gating, and Jupiter instruction conversion. Docker E2E is kept separate because it requires Docker and a PTY; it must be run against `SOL_WALLET_E2E_IMAGE`, never against `tsx` or the source tree. The workflow fails before publication if the image reference, Docker, pexpect, or any E2E test is missing, and uploads a method log plus image metadata on E2E failure.
 
 Before committing, TypeScript/JSON/Markdown/YAML changes are formatted with Prettier `3.6.2`, and the Python E2E harness is formatted with Black `25.1.0`; the repository rule for this is recorded in `AGENTS.md`.
 
@@ -93,7 +97,7 @@ Do not claim a devnet/mainnet write was tested unless an opt-in integration or m
 
 `Dockerfile` is multi-stage. The build stage runs `npm ci`, tests, and `npm run build`, then prunes development dependencies. The runtime stage contains `package.json`, production `node_modules`, and `dist` only, runs as `solwallet` (UID/GID `10001` by default), and starts directly at `dist/cli.js`. The documented mount is `/home/solwallet/.config/sol-wallet`; direct callers should pass their host UID/GID, while `scripts/sol-wallet` does that automatically.
 
-The intended CI order is formatting, source tests, `linux/amd64` image build, PTY/mock-RPC E2E against that exact tag, then GHCR authentication and push. Pushes to the repository's `main` or `master` branch and version tags trigger the workflow; pull requests never push. Version tags also publish the minor-series tag (for example `v0.1.0` publishes `0.1`). CI must not upload mounted wallet directories, passwords, private keys, or arbitrary logs.
+The intended CI order is formatting, source tests, `linux/amd64` image build, PTY/mock-RPC E2E against that exact tag, then GHCR authentication and push. Pushes to the repository's `main` or `master` branch and version tags trigger the workflow; pull requests never push. Version tags also publish the minor-series tag (for example `v0.2.0` publishes `0.2`). CI must not upload mounted wallet directories, passwords, private keys, or arbitrary logs.
 
 The post-review GitHub Actions run `35480368693` passed formatting, 18 unit tests, the TypeScript build, the exact-image Docker build, all 8 Docker E2E tests, GHCR authentication, and the exact tested-image push. The local container runtime cannot reproduce the runner's bind-mount ownership behavior, so this GitHub result is the authoritative Docker validation for this workspace.
 
@@ -103,5 +107,7 @@ The post-review GitHub Actions run `35480368693` passed formatting, 18 unit test
 - Read-only commands still need a network when they query chain state; `address` and `wallet info` do not.
 - A submitted transaction whose confirmation times out is not retried automatically; the signature is shown so it can be inspected.
 - The current token sender supports basic checked transfers and refuses Token-2022 extension mints.
+- Jupiter Lend requires mainnet-beta and canonical USDC; no live mainnet lending write has been executed by automated validation.
+- `npm audit --omit=dev` currently reports upstream transitive advisories through the legacy Jupiter SDK dependency graph; see [jupiter-lend.md](jupiter-lend.md) before any release dependency refresh.
 - Stake account JSON parsing follows the current generated/RPC shapes and deliberately reports `unknown` for locally registered accounts that cannot be discovered or decoded.
 - There is no mnemonic import, key replacement, cloud backup, hardware wallet, dApp integration, or arbitrary serialized transaction signing.

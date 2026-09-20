@@ -100,6 +100,12 @@ export class UnsupportedTokenExtensionError extends AppError {
   }
 }
 
+export class JupiterLendError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super(message, "JupiterLendError", 2, details);
+  }
+}
+
 export function asAppError(error: unknown): AppError {
   if (error instanceof AppError) return error;
   if (error instanceof Error) return new AppError(error.message);

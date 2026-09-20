@@ -15,6 +15,7 @@ const topLevel = [
   "token",
   "validators",
   "stake",
+  "lend",
   "tx",
   "set",
   "show",
@@ -27,6 +28,7 @@ const nested: Record<string, string[]> = {
   wallet: ["import", "info"],
   token: ["list", "balance", "send"],
   stake: ["create", "list", "deactivate", "withdraw"],
+  lend: ["status", "deposit", "withdraw"],
   tx: ["inspect"],
   set: ["cluster", "rpc-url", "commitment"],
   show: ["config"],
@@ -38,6 +40,8 @@ const flags: Record<string, string[]> = {
   "stake create": ["--validator", "--dry-run", "--yes", "--json"],
   "stake deactivate": ["--dry-run", "--yes", "--json"],
   "stake withdraw": ["--amount", "--dry-run", "--yes", "--json"],
+  "lend deposit": ["--dry-run", "--yes", "--json"],
+  "lend withdraw": ["--all", "--dry-run", "--yes", "--json"],
 };
 
 export function completeLine(

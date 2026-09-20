@@ -1,8 +1,8 @@
 # Solana Wallet CLI
 
-`sol-wallet` is a small, Solana-only command-line wallet for personal use. It keeps one imported Solana private key encrypted locally, supports read-only SOL and SPL/Token-2022 queries, SOL/token transfers, native staking, transaction inspection, and an interactive shell.
+`sol-wallet` is a small, Solana-only command-line wallet for personal use. It keeps one imported Solana private key encrypted locally, supports read-only SOL and SPL/Token-2022 queries, SOL/token transfers, native staking, transaction inspection, Jupiter Lend Earn USDC operations, and an interactive shell.
 
-The v0.1 release artifact is a `linux/amd64` Docker image. Jupiter Lend, seed phrases, multiple wallets, swaps, hardware wallets, dApps, and arbitrary transaction signing are intentionally out of scope.
+The v0.2 release artifact is a `linux/amd64` Docker image. v0.2 Jupiter Lend support is limited to canonical mainnet USDC Earn deposits, withdrawals, and withdrawal of the currently available maximum. Borrowing, seed phrases, multiple wallets, swaps, hardware wallets, dApps, and arbitrary transaction signing remain out of scope.
 
 ## Release image
 
@@ -35,7 +35,7 @@ npm run format:check
 npm run dev
 ```
 
-The code was tested with these exact stable dependency versions in the current lockfile: `@solana/kit 8.3.0`, `@solana/sysvars 8.3.0`, `@solana-program/system 0.14.1`, `@solana-program/stake 0.9.1`, `@solana-program/token 0.16.1`, `@solana-program/token-2022 0.17.0`, Node `>=24`, TypeScript `7.0.2`, Vitest `5.0.0`, Vite `8.3.0`, and Prettier `3.6.2`.
+The code was tested with these exact dependency versions in the current lockfile: `@jup-ag/lend 0.0.108`, `@jup-ag/lend-read 0.0.14`, `@solana/kit 8.3.0`, `@solana/sysvars 8.3.0`, `@solana-program/system 0.14.1`, `@solana-program/stake 0.9.1`, `@solana-program/token 0.16.1`, `@solana-program/token-2022 0.17.0`, Node `>=24`, TypeScript `7.0.2`, Vitest `5.0.0`, Vite `8.3.0`, and Prettier `3.6.2`.
 
 ## First use
 
@@ -72,6 +72,10 @@ stake list
 stake deactivate <stake-account>
 stake withdraw <stake-account> [--amount <amount>]
 tx inspect <signature>
+lend status
+lend deposit <amount>
+lend withdraw <amount>
+lend withdraw --all
 ```
 
 Every write command supports `--dry-run`, and confirmation can be skipped with `--yes` after validation and simulation still succeed. Automation uses the same parser and handlers as the shell:
@@ -79,9 +83,12 @@ Every write command supports `--dry-run`, and confirmation can be skipped with `
 ```bash
 sol-wallet -c "balance" --json
 sol-wallet -c "stake list" --cluster devnet --json
+sol-wallet -c "lend status" --json
 ```
 
 The default cluster is `mainnet-beta`; use `--cluster devnet`, `SOL_WALLET_CLUSTER=devnet`, or `set cluster devnet` for a session change. The current cluster is shown in prompts and write summaries.
+
+Jupiter Lend commands require `mainnet-beta` and verify the canonical Solana USDC mint (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) is owned by the legacy SPL Token Program with six decimals. The command boundary uses Jupiter's official Earn SDK adapter; its legacy web3 types are isolated under `src/integrations/jupiter-lend/`.
 
 ## Configuration and files
 
@@ -114,4 +121,4 @@ npm test
 
 Opt-in Solana integration tests use `RUN_SOLANA_INTEGRATION=1` and must never use a real developer wallet. Docker E2E tests exercise the built image through a PTY and deterministic mock RPC; set `SOL_WALLET_E2E_IMAGE` to the image under test.
 
-See [docs/implementation.md](docs/implementation.md) for the architecture, validation record, dependency-install incident, Docker workflow, and operational notes.
+See [docs/implementation.md](docs/implementation.md) and [docs/jupiter-lend.md](docs/jupiter-lend.md) for the architecture, v0.2 safety boundary, validation record, dependency-install incident, Docker workflow, and operational notes.

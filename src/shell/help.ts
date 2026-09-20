@@ -7,6 +7,7 @@ const HELP: Record<string, string> = {
   validators [--limit n] [--current-only] [--max-commission percent]
   stake create <amount> --validator <vote-account>
   stake list | stake deactivate <stake-account> | stake withdraw <stake-account> [--amount n]
+  lend status | lend deposit <amount> | lend withdraw <amount> | lend withdraw --all
   tx inspect <signature>
   set cluster <mainnet-beta|devnet> | set rpc-url <url> | set commitment <level>
   show config | history | clear | help | exit`,
@@ -21,6 +22,7 @@ const HELP: Record<string, string> = {
     "validators [--limit <n>] [--current-only] [--max-commission <percent>]",
   stake:
     "stake create <amount> --validator <vote-account>\nstake list\nstake deactivate <stake-account>\nstake withdraw <stake-account> [--amount <amount>]",
+  lend: "lend status\nlend deposit <amount> [--dry-run] [--yes]\nlend withdraw <amount> [--dry-run] [--yes]\nlend withdraw --all [--dry-run] [--yes]",
   tx: "tx inspect <signature>",
   set: "set cluster <mainnet-beta|devnet>\nset rpc-url <url>\nset commitment <processed|confirmed|finalized>",
 };
