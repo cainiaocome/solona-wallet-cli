@@ -40,7 +40,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 
 - `npm run format:check`: passing with Prettier 3.6.2.
 - `python3 -m black --check test/e2e`: passing with Black 25.1.0.
-- `npm test`: 22 offline unit tests passing across five files.
+- `npm test`: 23 offline unit tests passing across five files.
 - `npm run build`: passing.
 - `npm run lint`: passing.
 - `npm ci --dry-run --legacy-peer-deps`: passing.

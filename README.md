@@ -2,7 +2,7 @@
 
 `sol-wallet` is a small, Solana-only command-line wallet for personal use. It keeps one imported Solana private key encrypted locally, supports read-only SOL and SPL/Token-2022 queries, SOL/token transfers, native staking, transaction inspection, Jupiter Lend Earn USDC operations, and an interactive shell.
 
-The v0.2 release artifact is a `linux/amd64` Docker image. v0.2 Jupiter Lend support is limited to canonical mainnet USDC Earn deposits, withdrawals, and withdrawal of the currently available maximum. Borrowing, seed phrases, multiple wallets, swaps, hardware wallets, dApps, and arbitrary transaction signing remain out of scope.
+The v0.2 release artifact is a `linux/amd64` Docker image. v0.2 Jupiter Lend support is limited to canonical mainnet USDC Earn deposits, withdrawals, and withdrawal of the maximum currently available for this wallet. Borrowing, seed phrases, multiple wallets, swaps, hardware wallets, dApps, and arbitrary transaction signing remain out of scope.
 
 ## Release image
 

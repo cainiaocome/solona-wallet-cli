@@ -111,5 +111,6 @@ The v0.2 GitHub Actions run `35481360092` passed dependency installation, format
 - The current token sender supports basic checked transfers and refuses Token-2022 extension mints.
 - Jupiter Lend requires mainnet-beta and canonical USDC; no live mainnet lending write has been executed by automated validation.
 - `npm audit --omit=dev` currently reports upstream transitive advisories through the legacy Jupiter SDK dependency graph; see [jupiter-lend.md](jupiter-lend.md) before any release dependency refresh.
+- The runtime image strips the unused Jupiter read-SDK build/test toolchain after production pruning; the source install still retains those upstream dependency declarations for reproducible SDK use.
 - Stake account JSON parsing follows the current generated/RPC shapes and deliberately reports `unknown` for locally registered accounts that cannot be discovered or decoded.
 - There is no mnemonic import, key replacement, cloud backup, hardware wallet, dApp integration, or arbitrary serialized transaction signing.

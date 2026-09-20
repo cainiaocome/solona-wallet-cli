@@ -123,3 +123,9 @@ class DockerOneShotTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["cluster"], "devnet")
         self.assertEqual(payload["rpcUrl"], f"http://127.0.0.1:{self.port}")
+
+    def test_lend_mainnet_guard_is_present_in_the_runtime_image(self):
+        result = self.run_wallet("lend status", json_output=True)
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        error = json.loads(result.stderr)
+        self.assertIn("mainnet-beta", error["message"])

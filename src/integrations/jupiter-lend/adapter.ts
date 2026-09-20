@@ -2,6 +2,7 @@ import { Client as JupiterLendReadClient } from "@jup-ag/lend-read";
 import {
   getDepositContext,
   getDepositIx,
+  getRedeemIx,
   getWithdrawContext,
   getWithdrawIx,
 } from "@jup-ag/lend/earn";
@@ -13,13 +14,18 @@ import {
   type ParsedAccountData,
   type TransactionInstruction,
 } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  getAssociatedTokenAddressSync,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import type { AppConfig } from "../../config/config.js";
 import { JupiterLendError } from "../../errors/errors.js";
+import { formatUnits } from "../../solana/amounts.js";
 
 export const JUPITER_LEND_USDC_MINT =
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" as Address;
 export const JUPITER_LEND_USDC_DECIMALS = 6;
+export const LEGACY_SPL_TOKEN_ACCOUNT_SPACE = 165n;
 
 export interface WalletInstruction {
   programAddress: Address;
@@ -43,12 +49,18 @@ export interface JupiterLendInstructionPlan {
 export interface JupiterLendPosition {
   walletBalance: bigint;
   supplied: bigint;
+  protocolWithdrawable: bigint;
   withdrawable: bigint;
   receiptShares: bigint;
   receiptMint: Address;
   receiptTokenAccount: Address;
   supplyRateRaw: bigint;
   rewardsRateRaw: bigint;
+}
+
+export interface JupiterLendAdapterDependencies {
+  connection?: Connection;
+  readClient?: JupiterLendReadClient;
 }
 
 export function toWalletInstruction(
@@ -83,38 +95,56 @@ export class JupiterLendAdapter {
   private readonly readClient: JupiterLendReadClient;
   private verifiedUsdc = false;
 
-  constructor(private readonly config: AppConfig) {
+  constructor(
+    private readonly config: AppConfig,
+    dependencies: JupiterLendAdapterDependencies = {},
+  ) {
     if (config.cluster !== "mainnet-beta")
       throw new JupiterLendError(
         "Jupiter Lend v0.2 is available only on mainnet-beta.",
       );
-    this.connection = new Connection(config.rpcUrl, config.commitment);
-    this.readClient = new JupiterLendReadClient(
-      this.connection,
-      { commitment: config.commitment },
-      "main",
-    );
+    this.connection =
+      dependencies.connection ??
+      new Connection(config.rpcUrl, config.commitment);
+    this.readClient =
+      dependencies.readClient ??
+      new JupiterLendReadClient(
+        this.connection,
+        { commitment: config.commitment },
+        "main",
+      );
   }
 
   async getPosition(owner: Address): Promise<JupiterLendPosition> {
     await this.verifyCanonicalUsdc();
     const ownerKey = new PublicKey(owner);
     const mint = new PublicKey(JUPITER_LEND_USDC_MINT);
-    const [details, position, userSupply] = await Promise.all([
+    const [details, position] = await Promise.all([
       this.readClient.lending.getJlTokenDetails(mint),
       this.readClient.lending.getUserPosition(mint, ownerKey),
-      this.readClient.liquidity.getUserSupplyData(ownerKey, mint),
     ]);
-    const receiptTokenAccount = await this.deriveReceiptTokenAccount(
+    const protocolWithdrawable = toBigInt(details.userSupplyData.withdrawable);
+    const supplied = toBigInt(position.underlyingAssets);
+    const receiptMint = new PublicKey(details.tokenAddress);
+    const receiptMintInfo = await this.connection.getAccountInfo(receiptMint);
+    if (!receiptMintInfo)
+      throw new JupiterLendError(
+        `Jupiter Lend receipt mint ${receiptMint.toBase58()} was not found.`,
+      );
+    const receiptTokenAccount = getAssociatedTokenAddressSync(
+      receiptMint,
       ownerKey,
-      new PublicKey(details.tokenAddress),
+      false,
+      receiptMintInfo.owner,
     );
     return {
       walletBalance: toBigInt(position.underlyingBalance),
-      supplied: toBigInt(position.underlyingAssets),
-      withdrawable: toBigInt(userSupply.userSupplyData.withdrawable),
+      supplied,
+      protocolWithdrawable,
+      withdrawable:
+        supplied < protocolWithdrawable ? supplied : protocolWithdrawable,
       receiptShares: toBigInt(position.jlTokenShares),
-      receiptMint: address(details.tokenAddress.toBase58()),
+      receiptMint: address(receiptMint.toBase58()),
       receiptTokenAccount: address(receiptTokenAccount.toBase58()),
       supplyRateRaw: toBigInt(details.supplyRate),
       rewardsRateRaw: toBigInt(details.rewardsRate),
@@ -124,6 +154,7 @@ export class JupiterLendAdapter {
   async buildDeposit(
     owner: Address,
     amount: bigint,
+    signer?: { address: Address },
   ): Promise<JupiterLendInstructionPlan> {
     await this.verifyCanonicalUsdc();
     const ownerKey = new PublicKey(owner);
@@ -138,7 +169,7 @@ export class JupiterLendAdapter {
     );
     if (walletBalance < amount)
       throw new JupiterLendError(
-        `Insufficient USDC balance. Need ${amount} base units; have ${walletBalance}.`,
+        `Insufficient USDC balance. Need ${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC; have ${formatUnits(walletBalance, JUPITER_LEND_USDC_DECIMALS)} USDC.`,
       );
     const instruction = await getDepositIx({
       amount: new BN(amount.toString()),
@@ -147,7 +178,7 @@ export class JupiterLendAdapter {
       connection: this.connection,
     });
     return {
-      instructions: [toWalletInstruction(instruction)],
+      instructions: [toWalletInstruction(instruction, signer)],
       sourceTokenAccount: address(context.depositorTokenAccount.toBase58()),
       destinationTokenAccount: address(
         context.recipientTokenAccount.toBase58(),
@@ -161,6 +192,7 @@ export class JupiterLendAdapter {
   async buildWithdraw(
     owner: Address,
     amount: bigint,
+    signer?: { address: Address },
   ): Promise<JupiterLendInstructionPlan> {
     await this.verifyCanonicalUsdc();
     const ownerKey = new PublicKey(owner);
@@ -177,7 +209,38 @@ export class JupiterLendAdapter {
       connection: this.connection,
     });
     return {
-      instructions: [toWalletInstruction(instruction)],
+      instructions: [toWalletInstruction(instruction, signer)],
+      sourceTokenAccount: address(context.ownerTokenAccount.toBase58()),
+      destinationTokenAccount: address(
+        context.recipientTokenAccount.toBase58(),
+      ),
+      receiptMint: address(context.fTokenMint.toBase58()),
+      tokenProgram: address(context.tokenProgram.toBase58()),
+      walletBalance: 0n,
+    };
+  }
+
+  async buildRedeem(
+    owner: Address,
+    shares: bigint,
+    signer?: { address: Address },
+  ): Promise<JupiterLendInstructionPlan> {
+    await this.verifyCanonicalUsdc();
+    const ownerKey = new PublicKey(owner);
+    const asset = new PublicKey(JUPITER_LEND_USDC_MINT);
+    const context = await getWithdrawContext({
+      asset,
+      signer: ownerKey,
+      connection: this.connection,
+    });
+    const instruction = await getRedeemIx({
+      shares: new BN(shares.toString()),
+      asset,
+      signer: ownerKey,
+      connection: this.connection,
+    });
+    return {
+      instructions: [toWalletInstruction(instruction, signer)],
       sourceTokenAccount: address(context.ownerTokenAccount.toBase58()),
       destinationTokenAccount: address(
         context.recipientTokenAccount.toBase58(),
@@ -207,28 +270,18 @@ export class JupiterLendAdapter {
   }
 
   private async getTokenAccountBalance(account: PublicKey): Promise<bigint> {
+    const accountInfo = await this.connection.getAccountInfo(account);
+    if (!accountInfo) return 0n;
     try {
       const response = await this.connection.getTokenAccountBalance(account);
       return BigInt(response.value.amount);
-    } catch {
-      return 0n;
-    }
-  }
-
-  private async deriveReceiptTokenAccount(
-    owner: PublicKey,
-    receiptMint: PublicKey,
-  ): Promise<PublicKey> {
-    const context = await getDepositContext({
-      asset: new PublicKey(JUPITER_LEND_USDC_MINT),
-      signer: owner,
-      connection: this.connection,
-    });
-    if (!context.fTokenMint.equals(receiptMint))
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "unknown RPC failure";
       throw new JupiterLendError(
-        "Jupiter Lend receipt mint changed unexpectedly.",
+        `Unable to read the USDC token account balance: ${message}`,
       );
-    return context.recipientTokenAccount;
+    }
   }
 }
 

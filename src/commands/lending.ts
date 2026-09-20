@@ -1,5 +1,4 @@
 import {
-  AccountRole,
   address,
   appendTransactionMessageInstruction,
   compileTransaction,
@@ -22,6 +21,7 @@ import {
   JupiterLendAdapter,
   JUPITER_LEND_USDC_DECIMALS,
   JUPITER_LEND_USDC_MINT,
+  LEGACY_SPL_TOKEN_ACCOUNT_SPACE,
   type JupiterLendInstructionPlan,
   type JupiterLendPosition,
   type WalletInstruction,
@@ -57,8 +57,9 @@ export async function lendDeposit(
   const amount = parseUsdcAmount(command.args[0]!);
   const adapter = createAdapter(context);
   const owner = await requireWallet(context);
+  const signer = createLendSigner(context, owner);
   const plan = await runAdapter("building Jupiter Lend deposit", () =>
-    adapter.buildDeposit(owner, amount),
+    adapter.buildDeposit(owner, amount, signer),
   );
   const position = await runAdapter("reading Jupiter Lend position", () =>
     adapter.getPosition(owner),
@@ -67,6 +68,8 @@ export async function lendDeposit(
     context,
     command,
     owner,
+    signer,
+    "deposit",
     plan,
     {
       action: "Jupiter Lend USDC deposit",
@@ -103,18 +106,26 @@ export async function lendWithdraw(
   const position = await runAdapter("reading Jupiter Lend position", () =>
     adapter.getPosition(owner),
   );
+  const withdrawAll = hasFlag(command, "all");
   const amount = resolveWithdrawAmount(
     command.args[0],
-    hasFlag(command, "all"),
+    withdrawAll,
     position.withdrawable,
   );
+  const signer = createLendSigner(context, owner);
+  const redeemEntirePosition =
+    withdrawAll && position.protocolWithdrawable >= position.supplied;
   const plan = await runAdapter("building Jupiter Lend withdrawal", () =>
-    adapter.buildWithdraw(owner, amount),
+    redeemEntirePosition
+      ? adapter.buildRedeem(owner, position.receiptShares, signer)
+      : adapter.buildWithdraw(owner, amount, signer),
   );
   await runLendInstruction(
     context,
     command,
     owner,
+    signer,
+    "withdraw",
     plan,
     {
       action: "Jupiter Lend USDC withdraw",
@@ -122,7 +133,8 @@ export async function lendWithdraw(
       asset: "USDC",
       amount,
       amountUsdc: formatUnits(amount, JUPITER_LEND_USDC_DECIMALS),
-      withdrawAll: hasFlag(command, "all"),
+      withdrawAll,
+      redemption: redeemEntirePosition ? "all-receipt-shares" : "asset-amount",
       protocol: "Jupiter Lend Earn",
       cluster: context.config.cluster,
       currentSupplied: position.supplied,
@@ -137,16 +149,13 @@ async function runLendInstruction(
   context: CommandContext,
   command: ParsedCommand,
   owner: ReturnType<typeof address>,
+  signer: EncryptedKeystoreSigner,
+  operation: "deposit" | "withdraw",
   plan: JupiterLendInstructionPlan,
   summary: Record<string, unknown>,
   human: string,
   refresh: () => Promise<JupiterLendPosition>,
 ): Promise<void> {
-  const signer = new EncryptedKeystoreSigner(
-    context.config.configDir,
-    owner,
-    context.readPassphrase,
-  );
   const instructions: WalletInstruction[] = [];
   const destination = address(plan.destinationTokenAccount);
   const destinationInfo = await rpcRequest(
@@ -159,14 +168,19 @@ async function runLendInstruction(
   if (!destinationInfo.value) {
     ataCreationCost = BigInt(
       await rpcRequest(
-        context.getClient().rpc.getMinimumBalanceForRentExemption(165n, {
-          commitment: context.config.commitment,
-        }),
+        context
+          .getClient()
+          .rpc.getMinimumBalanceForRentExemption(
+            LEGACY_SPL_TOKEN_ACCOUNT_SPACE,
+            {
+              commitment: context.config.commitment,
+            },
+          ),
         "Jupiter Lend token account rent lookup",
       ),
     );
     const destinationMint =
-      summary.action === "Jupiter Lend USDC deposit"
+      operation === "deposit"
         ? address(plan.receiptMint)
         : address(JUPITER_LEND_USDC_MINT);
     instructions.push(
@@ -179,11 +193,7 @@ async function runLendInstruction(
       }) as unknown as WalletInstruction,
     );
   }
-  instructions.push(
-    ...plan.instructions.map((instruction) =>
-      attachSigner(instruction, signer),
-    ),
-  );
+  instructions.push(...plan.instructions);
   const rpc = context.getClient().rpc;
   const latest = await rpcRequest(
     rpc.getLatestBlockhash({ commitment: context.config.commitment }),
@@ -298,6 +308,17 @@ function createAdapter(context: CommandContext): JupiterLendAdapter {
   return new JupiterLendAdapter(context.config);
 }
 
+function createLendSigner(
+  context: CommandContext,
+  owner: ReturnType<typeof address>,
+): EncryptedKeystoreSigner {
+  return new EncryptedKeystoreSigner(
+    context.config.configDir,
+    owner,
+    context.readPassphrase,
+  );
+}
+
 export function parseUsdcAmount(value: string): bigint {
   const amount = parseDecimalUnits(
     value,
@@ -330,21 +351,6 @@ export function resolveWithdrawAmount(
   return amount;
 }
 
-function attachSigner(
-  instruction: WalletInstruction,
-  signer: EncryptedKeystoreSigner,
-): WalletInstruction {
-  return {
-    ...instruction,
-    accounts: instruction.accounts.map((account) =>
-      account.role === AccountRole.WRITABLE_SIGNER ||
-      account.role === AccountRole.READONLY_SIGNER
-        ? { ...account, signer }
-        : account,
-    ),
-  };
-}
-
 function positionData(
   owner: ReturnType<typeof address>,
   position: JupiterLendPosition,
@@ -363,6 +369,11 @@ function positionData(
     ),
     supplied: position.supplied,
     suppliedUsdc: formatUnits(position.supplied, JUPITER_LEND_USDC_DECIMALS),
+    protocolWithdrawable: position.protocolWithdrawable,
+    protocolWithdrawableUsdc: formatUnits(
+      position.protocolWithdrawable,
+      JUPITER_LEND_USDC_DECIMALS,
+    ),
     currentlyWithdrawable: position.withdrawable,
     currentlyWithdrawableUsdc: formatUnits(
       position.withdrawable,
@@ -377,7 +388,7 @@ function positionData(
 }
 
 function positionHuman(data: ReturnType<typeof positionData>): string {
-  return `Wallet:                    ${data.wallet}\nAsset:                     USDC\nWallet balance:            ${data.walletBalanceUsdc} USDC\nJupiter Lend supplied:     ${data.suppliedUsdc} USDC\nCurrently withdrawable:    ${data.currentlyWithdrawableUsdc} USDC\nReceipt token mint:         ${data.receiptTokenMint}\nReceipt token shares:       ${data.receiptTokenShares}\nProtocol supply rate (raw): ${data.protocolSupplyRateRaw}\nProtocol rewards rate (raw): ${data.protocolRewardsRateRaw}`;
+  return `Wallet:                    ${data.wallet}\nAsset:                     USDC\nWallet balance:            ${data.walletBalanceUsdc} USDC\nJupiter Lend supplied:     ${data.suppliedUsdc} USDC\nProtocol liquidity limit:  ${data.protocolWithdrawableUsdc} USDC\nCurrently withdrawable:    ${data.currentlyWithdrawableUsdc} USDC\nReceipt token mint:         ${data.receiptTokenMint}\nReceipt token shares:       ${data.receiptTokenShares}\nProtocol supply rate (raw): ${data.protocolSupplyRateRaw}\nProtocol rewards rate (raw): ${data.protocolRewardsRateRaw}`;
 }
 
 async function runAdapter<T>(

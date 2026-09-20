@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import BN from "bn.js";
+import { describe, expect, it, vi } from "vitest";
 import { AccountRole, address } from "@solana/kit";
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import {
@@ -7,6 +8,7 @@ import {
   JUPITER_LEND_USDC_MINT,
   toWalletInstruction,
 } from "../../src/integrations/jupiter-lend/adapter.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import {
   parseUsdcAmount,
   resolveWithdrawAmount,
@@ -21,7 +23,7 @@ describe("Jupiter Lend USDC boundary", () => {
     expect(() => parseUsdcAmount("1e3")).toThrow(/decimal string/);
   });
 
-  it("uses protocol withdrawability for explicit and --all withdrawals", () => {
+  it("uses the bounded wallet withdrawability for explicit and --all withdrawals", () => {
     expect(resolveWithdrawAmount("1.25", false, 2_000_000n)).toBe(1_250_000n);
     expect(resolveWithdrawAmount(undefined, true, 2_000_000n)).toBe(2_000_000n);
     expect(() => resolveWithdrawAmount("2.1", false, 2_000_000n)).toThrow(
@@ -45,6 +47,52 @@ describe("Jupiter Lend USDC boundary", () => {
     ).toThrow(/mainnet-beta/);
   });
 
+  it("reads protocol availability and caps it at the user's supplied assets", async () => {
+    const receiptMint = new PublicKey("11111111111111111111111111111113");
+    const connection = {
+      getParsedAccountInfo: vi.fn().mockResolvedValue({
+        value: {
+          owner: TOKEN_PROGRAM_ID,
+          data: {
+            parsed: { type: "mint", info: { decimals: 6 } },
+          },
+        },
+      }),
+      getAccountInfo: vi.fn().mockResolvedValue({ owner: TOKEN_PROGRAM_ID }),
+    };
+    const readClient = {
+      lending: {
+        getJlTokenDetails: vi.fn().mockResolvedValue({
+          tokenAddress: receiptMint,
+          userSupplyData: { withdrawable: new BN("2000000") },
+          supplyRate: new BN("3"),
+          rewardsRate: new BN("4"),
+        }),
+        getUserPosition: vi.fn().mockResolvedValue({
+          underlyingBalance: new BN("5000000"),
+          underlyingAssets: new BN("1000000"),
+          jlTokenShares: new BN("1000000"),
+        }),
+      },
+    };
+    const adapter = new JupiterLendAdapter(
+      {
+        cluster: "mainnet-beta",
+        rpcUrl: "https://api.mainnet-beta.solana.com",
+        commitment: "confirmed",
+        configDir: "/tmp",
+      },
+      { connection: connection as any, readClient: readClient as any },
+    );
+    const position = await adapter.getPosition(
+      address("FAe4sisG95oZ42w7buUn5qEE4TAnfTTFPiguZUHmhiF"),
+    );
+    expect(position.protocolWithdrawable).toBe(2_000_000n);
+    expect(position.supplied).toBe(1_000_000n);
+    expect(position.withdrawable).toBe(1_000_000n);
+    expect(readClient.lending.getUserPosition).toHaveBeenCalledOnce();
+  });
+
   it("converts official SDK instructions without losing account roles", () => {
     const signer = new PublicKey("11111111111111111111111111111112");
     const program = new PublicKey("11111111111111111111111111111111");
@@ -66,5 +114,9 @@ describe("Jupiter Lend USDC boundary", () => {
       AccountRole.READONLY,
     ]);
     expect(converted.accounts[0]?.signer).toBeDefined();
+    const mismatched = toWalletInstruction(instruction, {
+      address: address("11111111111111111111111111111113"),
+    });
+    expect(mismatched.accounts[0]?.signer).toBeUndefined();
   });
 });

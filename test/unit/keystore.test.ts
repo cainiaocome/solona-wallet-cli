@@ -61,7 +61,7 @@ describe("encrypted keystore", () => {
             ...stored!,
             cipher: {
               ...stored!.cipher,
-              tag: `A${stored!.cipher.tag.slice(1)}`,
+              tag: `${stored!.cipher.tag[0] === "A" ? "B" : "A"}${stored!.cipher.tag.slice(1)}`,
             },
           },
           "unit-test-passphrase",

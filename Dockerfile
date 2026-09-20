@@ -6,7 +6,16 @@ RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npm test
 RUN npm run build
-RUN npm prune --omit=dev
+RUN npm prune --omit=dev \
+  && rm -rf \
+    node_modules/@jup-ag/lend-read/node_modules/unbuild \
+    node_modules/@jup-ag/lend-read/node_modules/vitest \
+    node_modules/unbuild \
+    node_modules/vitest \
+    node_modules/rollup \
+    node_modules/esbuild \
+    node_modules/vite \
+    node_modules/tsx
 
 FROM node:24-bookworm-slim AS runtime
 
