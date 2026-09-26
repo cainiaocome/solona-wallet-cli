@@ -127,7 +127,14 @@ and production TypeScript build. The exact-image Docker E2E suite then passed al
 13 tests locally. Coverage includes two-wallet import and selection, alias
 changes, a signed mock-RPC transaction, legacy migration, startup overrides,
 invalid wallet selection, piped-passphrase rejection, and shell completion.
-GitHub Actions will repeat these gates on the pushed commit before publishing.
+GitHub Actions run [36254644864](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36254644864)
+on commit `22c97c8` passed dependency installation and the npm release-age
+policy, formatting, all 31 unit tests, the TypeScript build, the `linux/amd64`
+image build, all 13 exact-image E2E tests, GHCR authentication, and publication
+of that same tested image. GitHub emitted non-failing notices that the pinned
+workflow actions currently use a deprecated Node.js 20 runtime and that the
+`ubuntu-latest` runner image is scheduled to migrate to Ubuntu 26; neither
+notice affected this run.
 
 ## Known operational limits
 

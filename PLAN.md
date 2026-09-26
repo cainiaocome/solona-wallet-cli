@@ -25,8 +25,8 @@ and signing safety.
   acceptance coverage.
 - [complete] Docker image build and all 13 image-based E2E acceptance tests
   passed locally on 2026-09-26.
-- [in progress] Final review, commit, push, and verification of the resulting
-  GitHub Actions run.
+- [complete] Commit `22c97c8` was pushed to `master`; GitHub Actions passed all
+  gates and published the exact image that passed Docker E2E.
 
 ## Constraints
 
@@ -58,4 +58,7 @@ and signing safety.
   image-based E2E tests pass locally, including wallet import/selection,
   transaction signing through mock RPC, migration, TTY safeguards, and shell
   completion.
-- GitHub Actions for the requested push: pending until pushed and checked.
+- GitHub Actions run `36254644864` for commit `22c97c8`: passed dependency
+  installation and the npm release-age policy, formatting, 31 unit tests,
+  TypeScript build, `linux/amd64` image build, all 13 Docker E2E tests, GHCR
+  authentication, and push of the exact tested image.
