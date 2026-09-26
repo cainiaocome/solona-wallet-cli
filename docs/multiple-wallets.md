@@ -38,8 +38,9 @@ wallet info savings
 status
 ```
 
-The list marks the current and default wallet separately and displays each full
-address. `wallet info` reads public metadata without asking for a passphrase.
+The list marks the current and default wallet separately, aligns its columns to
+the longest alias and address, and displays each full address. `wallet info`
+reads public metadata without asking for a passphrase and aligns its labels.
 `status` displays the current wallet, saved default, network, RPC URL, and
 commitment. Status is a local configuration summary; it does not check RPC
 health or fetch a balance.

@@ -43,18 +43,55 @@ export async function walletList(context: CommandContext): Promise<void> {
       orphanIds,
     },
     wallets.length
-      ? `CURRENT DEFAULT ALIAS                            ADDRESS                                      HEALTH\n------- ------- -------------------------------- -------------------------------------------- -------\n${wallets
-          .map(
-            (wallet) =>
-              `${wallet.current ? "*" : " "} ${wallet.default ? "*" : " "} ${wallet.alias.padEnd(32)} ${wallet.address} ${wallet.health}`,
-          )
-          .join(
-            "\n",
-          )}${orphanIds.length ? `\n\nUnregistered UUID-named wallet paths (review before recovery):\n${orphanIds.join("\n")}` : ""}`
+      ? `${formatWalletTable(wallets)}${orphanIds.length ? `\n\nUnregistered UUID-named wallet paths (review before recovery):\n${orphanIds.join("\n")}` : ""}`
       : orphanIds.length
         ? `No wallets registered. Run \`wallet recover <uuid> <alias>\` for an unregistered key.\nUnregistered UUID-named wallet paths (review before recovery):\n${orphanIds.join("\n")}`
         : "No wallets registered. Run `wallet import <alias>`.",
   );
+}
+
+function formatWalletTable(
+  wallets: Array<{
+    current: boolean;
+    default: boolean;
+    alias: string;
+    address: string;
+    health: string;
+  }>,
+): string {
+  const headers = ["CURRENT", "DEFAULT", "ALIAS", "ADDRESS", "HEALTH"];
+  const widths = [
+    headers[0]!.length,
+    headers[1]!.length,
+    Math.max(
+      headers[2]!.length,
+      ...wallets.map((wallet) => wallet.alias.length),
+    ),
+    Math.max(
+      headers[3]!.length,
+      ...wallets.map((wallet) => wallet.address.length),
+    ),
+    Math.max(
+      headers[4]!.length,
+      ...wallets.map((wallet) => wallet.health.length),
+    ),
+  ];
+  const rows = wallets.map((wallet) =>
+    [
+      wallet.current ? "*" : "",
+      wallet.default ? "*" : "",
+      wallet.alias,
+      wallet.address,
+      wallet.health,
+    ]
+      .map((value, index) => value.padEnd(widths[index]!))
+      .join(" "),
+  );
+  return [
+    headers.map((value, index) => value.padEnd(widths[index]!)).join(" "),
+    widths.map((width) => "-".repeat(width)).join(" "),
+    ...rows,
+  ].join("\n");
 }
 
 export async function walletInfo(
@@ -80,6 +117,15 @@ export async function walletInfo(
     entry.id,
     registry,
   );
+  const details = [
+    ["Alias", entry.alias],
+    ["Address", selected.identity.address],
+    ["Cluster", context.config.cluster],
+    ["Private key", "encrypted at rest"],
+    ["Current", String(context.session.currentWalletId === entry.id)],
+    ["Default", String(registry.defaultWalletId === entry.id)],
+  ] as const;
+  const labelWidth = Math.max(...details.map(([label]) => label.length));
   context.output.print(
     {
       ok: true,
@@ -90,7 +136,9 @@ export async function walletInfo(
       default: registry.defaultWalletId === entry.id,
       encrypted: true,
     },
-    `Alias: ${entry.alias}\nAddress: ${selected.identity.address}\nCluster: ${context.config.cluster}\nPrivate key: encrypted at rest\nCurrent: ${context.session.currentWalletId === entry.id}\nDefault: ${registry.defaultWalletId === entry.id}`,
+    details
+      .map(([label, value]) => `${label.padEnd(labelWidth)}: ${value}`)
+      .join("\n"),
   );
 }
 

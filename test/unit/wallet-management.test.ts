@@ -7,6 +7,7 @@ import { createCommandContext } from "../../src/commands/context.js";
 import { Output } from "../../src/output/output.js";
 import {
   walletDefault,
+  walletInfo,
   walletList,
   walletRename,
   walletUse,
@@ -20,6 +21,98 @@ import {
 } from "../../src/wallet/keystore.js";
 
 describe("wallet management commands", () => {
+  it("aligns wallet-info labels and values", async () => {
+    const configDir = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-info-columns-"),
+    );
+    const output: string[] = [];
+    try {
+      const key = await createFixture(configDir, 21);
+      await createRegistryEntry(configDir, "demo", key.address, key.path);
+      const context = createCommandContext(
+        {
+          configDir,
+          cluster: "mainnet",
+          rpcUrl: "https://api.mainnet.solana.com",
+          commitment: "confirmed",
+        },
+        { json: false, verbose: false },
+      );
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        output.push(String(chunk));
+        return true;
+      });
+
+      await walletInfo(context, "demo");
+
+      const labels = output
+        .join("")
+        .trimEnd()
+        .split("\n")
+        .map((line) => line.indexOf(":"));
+      expect(new Set(labels).size).toBe(1);
+    } finally {
+      vi.restoreAllMocks();
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+
+  it("aligns wallet-list values under their headings for long aliases and addresses", async () => {
+    const configDir = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-list-columns-"),
+    );
+    const output: string[] = [];
+    try {
+      const firstKey = await createFixture(configDir, 22);
+      const secondKey = await createFixture(configDir, 62);
+      const first = await createRegistryEntry(
+        configDir,
+        "demo",
+        firstKey.address,
+        firstKey.path,
+      );
+      await createRegistryEntry(
+        configDir,
+        "longer_alias",
+        secondKey.address,
+        secondKey.path,
+      );
+      const context = createCommandContext(
+        {
+          configDir,
+          cluster: "mainnet",
+          rpcUrl: "https://api.mainnet.solana.com",
+          commitment: "confirmed",
+        },
+        { json: false, verbose: false },
+        { currentWalletId: first.entry.id },
+      );
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        output.push(String(chunk));
+        return true;
+      });
+
+      await walletList(context);
+
+      const [header, , firstRow, secondRow] = output
+        .join("")
+        .trimEnd()
+        .split("\n");
+      expect(firstRow!.indexOf("demo")).toBe(header!.indexOf("ALIAS"));
+      expect(firstRow!.indexOf(firstKey.address)).toBe(
+        header!.indexOf("ADDRESS"),
+      );
+      expect(secondRow!.indexOf("longer_alias")).toBe(header!.indexOf("ALIAS"));
+      expect(secondRow!.indexOf(secondKey.address)).toBe(
+        header!.indexOf("ADDRESS"),
+      );
+      expect(firstRow!.indexOf("*", 1)).toBe(header!.indexOf("DEFAULT"));
+    } finally {
+      vi.restoreAllMocks();
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+
   it("shows orphan UUID files in human wallet-list output", async () => {
     const configDir = await mkdtemp(
       path.join(os.tmpdir(), "sol-wallet-list-orphan-"),
