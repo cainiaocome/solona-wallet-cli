@@ -108,7 +108,12 @@ status
 address
 ```
 
-They read only the public address and keystore metadata.
+`wallet list`, `wallet info`, and `wallet use` read local public metadata.
+`status` also checks the selected RPC/network and fetches public SOL and token
+balances. None of these commands decrypts the private key. The startup greeting
+does not make an RPC request; run `status` when you want a fresh portfolio view.
+See [Understanding CLI output](command-output.md) for what health and
+unavailable balance sections mean.
 Read [Managing multiple wallets](multiple-wallets.md) for the difference between
 the current wallet and saved default, migration from an older single-wallet
 directory, backups, and recovery.
@@ -120,11 +125,17 @@ Solana has separate networks. This project supports:
 - `mainnet`: real SOL, real tokens, and real transactions.
 - `devnet`: a public testing network whose tokens are not real money.
 
-The default is `mainnet`. Check the prompt or run:
+The default is `mainnet`. Check the startup greeting or run:
 
 ```text
 show config
 ```
+
+`show config` displays local settings. Use `status` to verify the RPC's network
+and view the selected wallet's SOL and non-zero token balances, with native
+stake and (on mainnet) Jupiter Lend positions shown separately. The status
+refresh marks failed reads as unavailable rather than showing a misleading
+zero.
 
 The current public RPC is `https://api.mainnet.solana.com`. Configuration must
 use the current cluster name, `mainnet`; see the [mainnet setup guide](mainnet-migration.md).
@@ -149,9 +160,10 @@ write. The [multiple-wallet guide](multiple-wallets.md) explains these choices.
 These inspect public chain data and do not need the passphrase:
 
 ```text
+status
 address
 balance
-token list
+token list --accounts
 token balance <mint>
 validators --limit 10
 stake list
@@ -190,9 +202,9 @@ skip validation or simulation.
 Use this order when learning the project:
 
 1. `address` and `wallet info` — learn the public identity.
-2. `show config` — verify cluster, RPC URL, and commitment.
-3. `balance` — learn SOL and lamports.
-4. `token list` — learn token accounts and mint addresses.
+2. `show config` — inspect the local cluster, RPC URL, and commitment.
+3. `status` — verify the RPC/network and see SOL and token balances.
+4. `token list --accounts` — inspect token accounts and full mint addresses.
 5. Run a `send ... --dry-run` against devnet — learn transaction preflight.
 6. Try `stake list` and inspect a transaction with `tx inspect <signature>`.
 7. Read [web3-concepts.md](web3-concepts.md) before using staking or lending.

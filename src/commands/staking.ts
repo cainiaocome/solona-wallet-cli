@@ -2,6 +2,7 @@ import {
   AccountRole,
   appendTransactionMessageInstruction,
   address,
+  type Address,
   compileTransaction,
   createAddressWithSeed,
   createTransactionMessage,
@@ -43,6 +44,8 @@ import {
   safeJson,
 } from "../errors/errors.js";
 import { confirm } from "../shell/prompt.js";
+import { shortenAddress, table } from "../output/human.js";
+import { formatTransactionReceipt } from "../output/transaction.js";
 import { flagValue, hasFlag, type ParsedCommand } from "../shell/parser.js";
 import { formatSol, parseSol } from "../solana/amounts.js";
 import { rpcRequest } from "../solana/rpc.js";
@@ -274,8 +277,8 @@ export async function stakeCreate(
       context.session.yes ||
       (await confirm(
         context.config.cluster === "mainnet"
-          ? "You are about to submit a MAINNET transaction. Proceed?"
-          : "Submit this staking transaction?",
+          ? `Create and delegate ${formatSol(requested)} SOL to validator ${shortenAddress(String(validator.voteAccount))} on MAINNET?`
+          : `Create and delegate ${formatSol(requested)} SOL to validator ${shortenAddress(String(validator.voteAccount))} on devnet?`,
       ))
     )
   )
@@ -294,6 +297,7 @@ export async function stakeCreate(
     String(signature),
     context.config.commitment,
     latest.value.lastValidBlockHeight,
+    !context.output.json && Boolean(process.stderr.isTTY),
   );
   let registrySaved = true;
   try {
@@ -315,14 +319,65 @@ export async function stakeCreate(
       stakeAccount,
       registrySaved,
     },
-    `Stake created and delegated. Signature: ${signature}\nStake account: ${stakeAccount}${registrySaved ? "" : "\nWarning: local stake registry could not be updated."}`,
+    `${formatTransactionReceipt({
+      action: "Stake delegation",
+      wallet: context.commandWallet?.identity,
+      cluster: context.config.cluster,
+      confirmation: status.confirmationStatus,
+      slot: status.slot,
+      signature: String(signature),
+      details: [
+        ["Stake account", String(stakeAccount)],
+        ["Validator vote account", String(validator.voteAccount)],
+        ["Effective stake", `${formatSol(requested)} SOL`],
+        ["Estimated network fee", `~${formatSol(fee)} SOL`],
+        ["Local stake record", registrySaved ? "saved" : "not saved"],
+      ],
+    })}${registrySaved ? "" : "\nWarning: local stake registry could not be updated."}`,
   );
 }
 
 export async function stakeList(context: CommandContext): Promise<void> {
   const owner = await requireWallet(context);
+  const accounts = await readStakeAccounts(context, owner);
+  context.output.print(
+    { ok: true, owner, accounts },
+    `Network: ${context.config.cluster}\n` +
+      (accounts.length
+        ? table(
+            accounts.map((account) => [
+              String(account.state),
+              "lamports" in account
+                ? `${formatSol(BigInt(account.lamports as bigint))} SOL`
+                : "unknown",
+              "delegatedStakeLamports" in account
+                ? `${formatSol(BigInt(account.delegatedStakeLamports as bigint))} SOL`
+                : "unknown",
+              "validatorVoteAccount" in account
+                ? String(account.validatorVoteAccount)
+                : "unknown",
+              String(account.address),
+            ]),
+            [
+              "STATE",
+              "BALANCE",
+              "DELEGATED",
+              "VALIDATOR VOTE ACCOUNT",
+              "STAKE ACCOUNT",
+            ],
+          )
+        : "No stake accounts found."),
+  );
+}
+
+/** Read chain stake accounts and wallet-scoped recovery hints without printing. */
+export async function readStakeAccounts(
+  context: CommandContext,
+  owner: Address,
+  clusterVerified = false,
+): Promise<Record<string, unknown>[]> {
   const rpc = context.getClient().rpc;
-  await assertRpcCluster(rpc, context.config.cluster);
+  if (!clusterVerified) await assertRpcCluster(rpc, context.config.cluster);
   const config = {
     commitment: context.config.commitment,
     encoding: "jsonParsed" as const,
@@ -381,17 +436,7 @@ export async function stakeList(context: CommandContext): Promise<void> {
   context.completion.stakeAccounts = accounts.map((account) =>
     String(account.address),
   );
-  context.output.print(
-    { ok: true, owner, accounts },
-    accounts.length
-      ? accounts
-          .map(
-            (account) =>
-              `${String(account.address)}  ${String(account.state)}  ${"lamports" in account ? formatSol(BigInt(account.lamports as bigint)) + " SOL" : ""}  ${"validatorVoteAccount" in account ? String(account.validatorVoteAccount) : ""}`,
-          )
-          .join("\n")
-      : "No stake accounts found.",
-  );
+  return accounts;
 }
 
 export async function stakeDeactivate(
@@ -553,11 +598,7 @@ async function runStakeInstruction(
     !(
       hasFlag(command, "yes") ||
       context.session.yes ||
-      (await confirm(
-        context.config.cluster === "mainnet"
-          ? "You are about to submit a MAINNET transaction. Proceed?"
-          : "Submit this transaction?",
-      ))
+      (await confirm(stakeConfirmationPrompt(summary, context.config.cluster)))
     )
   )
     throw new TransactionRejectedError();
@@ -575,6 +616,7 @@ async function runStakeInstruction(
     String(signature),
     context.config.commitment,
     latest.value.lastValidBlockHeight,
+    !context.output.json && Boolean(process.stderr.isTTY),
   );
   context.output.print(
     {
@@ -584,8 +626,51 @@ async function runStakeInstruction(
       status: status.confirmationStatus,
       preflight,
     },
-    `Transaction confirmed: ${signature}`,
+    formatTransactionReceipt({
+      action: String(summary.action),
+      wallet: context.commandWallet?.identity,
+      cluster: context.config.cluster,
+      confirmation: status.confirmationStatus,
+      slot: status.slot,
+      signature: String(signature),
+      details: [
+        ...(typeof summary.stakeAccount === "string"
+          ? [["Stake account", summary.stakeAccount] as const]
+          : []),
+        ...(typeof summary.validatorVoteAccount === "string"
+          ? [["Validator vote account", summary.validatorVoteAccount] as const]
+          : []),
+        ...(typeof summary.stakeLamports === "bigint"
+          ? [["Stake", `${formatSol(summary.stakeLamports)} SOL`] as const]
+          : []),
+        ...(typeof summary.amountLamports === "bigint"
+          ? [["Withdrawn", `${formatSol(summary.amountLamports)} SOL`] as const]
+          : []),
+        ...(typeof summary.destination === "string"
+          ? [["Destination", summary.destination] as const]
+          : []),
+        ["Estimated network fee", `~${formatSol(fee)} SOL`],
+      ],
+    }),
   );
+}
+
+function stakeConfirmationPrompt(
+  summary: Record<string, unknown>,
+  cluster: "mainnet" | "devnet",
+): string {
+  const network = cluster === "mainnet" ? "MAINNET" : "devnet";
+  const stakeAccount =
+    typeof summary.stakeAccount === "string"
+      ? shortenAddress(summary.stakeAccount)
+      : "the stake account";
+  if (summary.action === "Deactivate stake")
+    return `Deactivate ${stakeAccount} on ${network}? Funds will not be immediately withdrawable.`;
+  const amount =
+    typeof summary.amountLamports === "bigint"
+      ? `${formatSol(summary.amountLamports)} SOL`
+      : "the available amount";
+  return `Withdraw ${amount} from ${stakeAccount} on ${network}?`;
 }
 
 async function getControlledStake(

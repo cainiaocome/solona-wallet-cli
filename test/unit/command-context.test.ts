@@ -218,6 +218,59 @@ describe("command-scoped wallet and output context", () => {
     }
   });
 
+  it("keeps Jupiter Lend human status focused on user amounts by default", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-jupiter-status-output-"),
+    );
+    const output: string[] = [];
+    try {
+      const wallet = await registerFixture(directory);
+      mockedLend.position = {
+        walletBalance: 2_000_000n,
+        supplied: 3_000_000n,
+        protocolWithdrawable: 2_500_000n,
+        withdrawable: 2_500_000n,
+        receiptShares: 3_000_000n,
+        receiptMint: "11111111111111111111111111111112",
+        receiptTokenAccount: "11111111111111111111111111111113",
+        supplyRateRaw: 123n,
+        rewardsRateRaw: 456n,
+      };
+      const config = {
+        configDir: directory,
+        cluster: "mainnet" as const,
+        rpcUrl: "https://api.mainnet.solana.com",
+        commitment: "confirmed" as const,
+      };
+      const regular = createCommandContext(
+        config,
+        { json: false, verbose: false },
+        { currentWalletId: wallet.id },
+      );
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        output.push(String(chunk));
+        return true;
+      });
+
+      await executeLine(regular, "jupiter-lend status");
+      const summary = output.join("");
+      expect(summary).toContain("Wallet balance: 2 USDC");
+      expect(summary).toContain("Currently withdrawable: 2.5 USDC");
+      expect(summary).not.toContain("Protocol supply rate (raw)");
+
+      output.length = 0;
+      const verbose = createCommandContext(
+        config,
+        { json: false, verbose: true },
+        { currentWalletId: wallet.id },
+      );
+      await executeLine(verbose, "jupiter-lend status");
+      expect(output.join("")).toContain("Protocol supply rate (raw): 123");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("signs a deterministic Jupiter instruction with the selected wallet", async () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "sol-wallet-jupiter-signing-"),

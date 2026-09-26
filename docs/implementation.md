@@ -41,7 +41,7 @@ The installed core stack is `@solana/kit@8.3.0`, `@solana/sysvars@8.3.0`, `@sola
 
 ## Source layout
 
-`src/cli.ts` parses only startup flags and chooses one-shot or REPL execution. `src/shell/` owns tokenization, command completion, history filtering, help, hidden prompts, and readline. `src/commands/` contains user-facing handlers. `src/config/` handles precedence and permissions. `src/wallet/` is the only layer that reads or decrypts key material. `src/solana/` contains Kit RPC access, exact amounts, token decoding, validators, and transaction helpers. `src/integrations/jupiter-lend/` isolates Jupiter's legacy SDK types. `src/integrations/stake-activation.ts` isolates the legacy web3 connection used for the RPC activation-state query. `src/output/` separates JSON and human output.
+`src/cli.ts` parses startup flags (including `--help`) and chooses one-shot or REPL execution. `src/shell/` owns tokenization, command completion, history filtering, help, hidden prompts, and readline. `src/commands/` contains user-facing handlers. `src/config/` handles precedence and permissions. `src/wallet/` is the only layer that reads or decrypts key material. `src/solana/` contains Kit RPC access, exact amounts, token decoding, validators, and transaction helpers. `src/integrations/jupiter-lend/` isolates Jupiter's legacy SDK types. `src/integrations/stake-activation.ts` isolates the legacy web3 connection used for the RPC activation-state query. `src/output/` separates JSON, human tables, and transaction receipts.
 
 The command flow is:
 
@@ -59,7 +59,19 @@ readline or -c text
 
 Read-only address, balance, token, validator, and stake-list commands use the public keystore metadata and never invoke the signer. The `EncryptedKeystoreSigner` decrypts only from its `signTransactions` boundary; transaction handlers cannot call a `getPrivateKey()` method.
 
-`jupiter-lend status` follows the same read-only rule. It uses `@jup-ag/lend-read` with the public wallet address and reports the SDK's supplied, withdrawable, receipt-share, and raw rate fields. Jupiter Lend writes use `@jup-ag/lend` only to construct explicit Earn instructions, then convert them into the common Kit message and signer pipeline. Before network reads or writes, the configured RPC endpoint's genesis hash must match the selected mainnet or devnet cluster.
+`jupiter-lend status` follows the same read-only rule. It uses `@jup-ag/lend-read` with the public wallet address and reports supplied and withdrawable amounts in human output. Receipt-share and raw rate fields remain available through `--verbose` or JSON. Jupiter Lend writes use `@jup-ag/lend` only to construct explicit Earn instructions, then convert them into the common Kit message and signer pipeline. Before network reads or writes, the configured RPC endpoint's genesis hash must match the selected mainnet or devnet cluster.
+
+The `status` dashboard is an explicit refresh; shell startup does not contact
+RPC. It checks the endpoint's genesis hash, then reads SOL, token, native-stake,
+and (on mainnet) Jupiter Lend USDC data independently. Its JSON reports each
+section as available or unavailable and marks partial reads as `degraded`; it
+never substitutes zero for an RPC error. Liquid balances and positions remain
+separate, and Jupiter is explicitly marked mainnet-only on devnet. Human TTY
+sessions get a refresh notice; it is omitted from JSON. Human tables aggregate
+tokens by mint while `token list --accounts` preserves account-level detail.
+Write receipts include the confirmed slot, signature, and a cluster-appropriate
+explorer link. TTY-only confirmation progress is written to stderr and is
+disabled for JSON output.
 
 ## Keystore format and recovery behavior
 

@@ -3,7 +3,8 @@
 The examples below use shell syntax for commands typed into the interactive
 prompt unless a command starts with `sol-wallet`. Replace angle-bracket values
 with real addresses. Do not paste a private key into shell history, a script,
-or a command-line argument.
+or a command-line argument. For a tour of human output and its meaning, see
+[Understanding CLI output](command-output.md).
 
 ## Common options
 
@@ -14,6 +15,7 @@ sol-wallet --cluster devnet
 sol-wallet --rpc-url https://example.invalid/rpc
 sol-wallet --commitment finalized
 sol-wallet -c "balance" --json
+sol-wallet --verbose -c "balance"
 ```
 
 Command options are parsed by the same command engine in the REPL and one-shot
@@ -51,6 +53,12 @@ transaction previews. `wallet use` changes only this process, while
 choose explicitly with `sol-wallet --wallet savings -c "balance" --json`.
 See [the multiple-wallet guide](multiple-wallets.md) for recovery and migration.
 
+`status` checks the selected network's RPC and shows the selected wallet's SOL
+and non-zero token balances, plus separate native-stake and mainnet Jupiter
+Lend position summaries. These positions are not added to liquid balances.
+`show config` is the local configuration-only view. A failed RPC read is shown
+as unavailable, not as a zero balance.
+
 To experiment with a fully separate store, set another configuration directory:
 
 ```bash
@@ -86,8 +94,11 @@ balance
 send <destination> 0.001 --dry-run
 ```
 
-`balance` displays SOL and the exact lamport value. `send` requires enough SOL
-for the amount plus a network fee. Start with a small devnet dry-run.
+`balance` displays the human SOL amount. Exact lamports remain in JSON output
+and are included in human output when the process is started with `--verbose`.
+`send` requires enough SOL for the amount plus a network fee. Its preview and
+success receipt show the selected wallet, destination, network, confirmation,
+signature, and explorer link. Start with a small devnet dry-run.
 
 For JSON automation:
 
@@ -97,11 +108,15 @@ sol-wallet -c "balance" --cluster devnet --json > balance.json
 
 ## SPL and Token-2022 tokens
 
-List token accounts owned by the wallet:
+Show token balances grouped by mint:
 
 ```text
 token list
 ```
+
+Use `token list --accounts` when you need each token account address. The
+default view includes the full mint, token program, total balance, and account
+count.
 
 Read one mint's balance:
 
@@ -131,7 +146,8 @@ validators --include-delinquent
 ```
 
 Delinquent validators are hidden by default. Add `--include-delinquent` when
-you want to include them in the results.
+you want to include them in the results. The table shows full vote-account
+addresses so they can be supplied to `stake create`.
 
 Create and delegate a native stake account:
 
@@ -144,6 +160,10 @@ List stake accounts discovered for the wallet:
 ```text
 stake list
 ```
+
+The table includes activation state, account balance, delegated amount,
+validator vote account, and stake-account address. An `unknown` state can refer
+to a local recovery hint that the selected RPC did not return.
 
 Request deactivation and later withdraw inactive stake:
 
@@ -166,8 +186,9 @@ jupiter-lend status
 ```
 
 The command reports supplied assets, protocol liquidity, and the smaller
-currently withdrawable amount. It requires `mainnet`; it is not a devnet
-demo.
+currently withdrawable amount. Human output emphasizes these user amounts;
+receipt-share details and raw rate fields are available with `--verbose` or
+`--json`. It requires `mainnet`; it is not a devnet demo.
 
 Deposit after independently checking the amount and protocol:
 
@@ -198,9 +219,11 @@ has been performed by this repository's automated validation.
 tx inspect <signature>
 ```
 
-Use the signature printed after broadcast. Run the inspection on the same
-cluster where the transaction was submitted. If a confirmation timeout occurs,
-inspect first and only retry after determining whether the transaction landed.
+Use the signature printed after broadcast. Human output summarizes the result,
+slot, fee, signers, instruction count, and explorer link. Add `--json` to see
+the complete RPC transaction response. Run the inspection on the same cluster
+where the transaction was submitted. If a confirmation timeout occurs, inspect
+first and only retry after determining whether the transaction landed.
 
 ## Interactive shell conveniences
 
@@ -217,7 +240,9 @@ exit
 
 Typing a command group without a subcommand displays that group's available
 commands and usage. This also works with the wallet, transaction, and show
-groups.
+groups. At startup, `sol-wallet --help` or `sol-wallet -h` lists process
+options. The greeting does not fetch chain data; run `status` for a fresh
+balance overview.
 
 The shell stores up to 1,000 filtered commands. Lines containing common secret
 words such as `private key`, `password`, or `passphrase` are not persisted.

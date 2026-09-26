@@ -37,6 +37,7 @@ import {
 import { rpcRequest } from "../solana/rpc.js";
 import { hasFlag, type ParsedCommand } from "../shell/parser.js";
 import { EncryptedKeystoreSigner } from "../wallet/signer.js";
+import { formatTransactionReceipt } from "../output/transaction.js";
 
 /**
  * Jupiter Lend command layer.
@@ -47,13 +48,21 @@ import { EncryptedKeystoreSigner } from "../wallet/signer.js";
  * and canonical-asset checks plus official Jupiter SDK translation.
  */
 export async function lendStatus(context: CommandContext): Promise<void> {
-  const adapter = createAdapter(context);
   const owner = await requireWallet(context);
-  const position = await runAdapter("reading Jupiter Lend position", () =>
+  const position = await readLendPosition(context, owner);
+  const data = positionData(owner, position, context);
+  context.output.print(data, positionHuman(data, context.output.verbose));
+}
+
+/** Reusable public-position read for status and the dedicated command. */
+export async function readLendPosition(
+  context: CommandContext,
+  owner: ReturnType<typeof address>,
+): Promise<JupiterLendPosition> {
+  const adapter = createAdapter(context);
+  return runAdapter("reading Jupiter Lend position", () =>
     adapter.getPosition(owner),
   );
-  const data = positionData(owner, position, context);
-  context.output.print(data, positionHuman(data));
 }
 
 export async function lendDeposit(
@@ -89,7 +98,7 @@ export async function lendDeposit(
       cluster: context.config.cluster,
       currentSupplied: position.supplied,
     },
-    `Action:        Jupiter Lend USDC deposit\nWallet:        ${owner}\nAsset:         USDC\nAmount:        ${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC\nProtocol:      Jupiter Lend Earn\nCluster:       ${context.config.cluster}`,
+    `Action:        Jupiter Lend USDC deposit\nWallet:        ${owner}\nAsset:         USDC\nAmount:        ${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC\nProtocol:      Jupiter Lend Earn\nNetwork:       ${context.config.cluster}`,
     () => adapter.getPosition(owner),
   );
 }
@@ -148,7 +157,7 @@ export async function lendWithdraw(
       currentSupplied: position.supplied,
       currentWithdrawable: position.withdrawable,
     },
-    `Action:        Jupiter Lend USDC withdraw\nWallet:        ${owner}\nAsset:         USDC\nAmount:        ${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC\nProtocol:      Jupiter Lend Earn\nCluster:       ${context.config.cluster}`,
+    `Action:        Jupiter Lend USDC withdraw\nWallet:        ${owner}\nAsset:         USDC\nAmount:        ${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC\nProtocol:      Jupiter Lend Earn\nNetwork:       ${context.config.cluster}`,
     () => adapter.getPosition(owner),
   );
 }
@@ -243,7 +252,7 @@ async function runLendInstruction(
   };
   context.output.preflight(
     { ok: true, preflight },
-    `${human}\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:       ${context.config.cluster}`,
+    `${human}\nNetwork fee:  ~${formatSol(fee)} SOL`,
   );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
@@ -270,7 +279,7 @@ async function runLendInstruction(
       hasFlag(command, "yes") ||
       context.session.yes ||
       (await confirm(
-        "You are about to submit a MAINNET Jupiter Lend transaction. Proceed?",
+        `${operation === "deposit" ? "Deposit" : "Withdraw"} ${formatUnits(BigInt(summary.amount as bigint), JUPITER_LEND_USDC_DECIMALS)} USDC ${operation === "deposit" ? "into" : "from"} Jupiter Lend for ${context.commandWallet?.identity.alias ?? "the selected wallet"} on MAINNET?`,
       ))
     )
   )
@@ -289,6 +298,7 @@ async function runLendInstruction(
     String(signature),
     context.config.commitment,
     latest.value.lastValidBlockHeight,
+    !context.output.json && Boolean(process.stderr.isTTY),
   );
   let refreshed: JupiterLendPosition | undefined;
   try {
@@ -307,7 +317,33 @@ async function runLendInstruction(
         ? { position: positionData(owner, refreshed, context) }
         : {}),
     },
-    `Transaction confirmed: ${signature}${refreshed ? `\nCurrent supplied: ${formatUnits(refreshed.supplied, JUPITER_LEND_USDC_DECIMALS)} USDC\nCurrently withdrawable: ${formatUnits(refreshed.withdrawable, JUPITER_LEND_USDC_DECIMALS)} USDC` : "\nPosition refresh unavailable."}`,
+    `${formatTransactionReceipt({
+      action: `Jupiter Lend USDC ${operation}`,
+      wallet: context.commandWallet?.identity,
+      cluster: context.config.cluster,
+      confirmation: status.confirmationStatus,
+      slot: status.slot,
+      signature: String(signature),
+      details: [
+        [
+          "Amount",
+          `${formatUnits(BigInt(summary.amount as bigint), JUPITER_LEND_USDC_DECIMALS)} USDC`,
+        ],
+        ["Estimated network fee", `~${formatSol(fee)} SOL`],
+        ...(refreshed
+          ? [
+              [
+                "Currently supplied",
+                `${formatUnits(refreshed.supplied, JUPITER_LEND_USDC_DECIMALS)} USDC`,
+              ] as const,
+              [
+                "Currently withdrawable",
+                `${formatUnits(refreshed.withdrawable, JUPITER_LEND_USDC_DECIMALS)} USDC`,
+              ] as const,
+            ]
+          : []),
+      ],
+    })}${refreshed ? "" : "\nPosition refresh unavailable."}`,
   );
 }
 
@@ -393,8 +429,27 @@ function positionData(
   };
 }
 
-function positionHuman(data: ReturnType<typeof positionData>): string {
-  return `Wallet:                    ${data.wallet}\nAsset:                     USDC\nWallet balance:            ${data.walletBalanceUsdc} USDC\nJupiter Lend supplied:     ${data.suppliedUsdc} USDC\nProtocol liquidity limit:  ${data.protocolWithdrawableUsdc} USDC\nCurrently withdrawable:    ${data.currentlyWithdrawableUsdc} USDC\nReceipt token mint:         ${data.receiptTokenMint}\nReceipt token shares:       ${data.receiptTokenShares}\nProtocol supply rate (raw): ${data.protocolSupplyRateRaw}\nProtocol rewards rate (raw): ${data.protocolRewardsRateRaw}`;
+function positionHuman(
+  data: ReturnType<typeof positionData>,
+  verbose: boolean,
+): string {
+  const lines = [
+    `Wallet: ${data.wallet}`,
+    `Network: ${data.cluster}`,
+    "Asset: USDC",
+    `Wallet balance: ${data.walletBalanceUsdc} USDC`,
+    `Jupiter Lend supplied: ${data.suppliedUsdc} USDC`,
+    `Protocol liquidity limit: ${data.protocolWithdrawableUsdc} USDC`,
+    `Currently withdrawable: ${data.currentlyWithdrawableUsdc} USDC`,
+  ];
+  if (verbose)
+    lines.push(
+      `Receipt token mint: ${data.receiptTokenMint}`,
+      `Receipt token shares: ${data.receiptTokenShares}`,
+      `Protocol supply rate (raw): ${data.protocolSupplyRateRaw}`,
+      `Protocol rewards rate (raw): ${data.protocolRewardsRateRaw}`,
+    );
+  return lines.join("\n");
 }
 
 async function runAdapter<T>(

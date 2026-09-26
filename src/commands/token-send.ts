@@ -40,6 +40,8 @@ import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 import { requireSelectedWallet, requireWallet } from "./read-only.js";
 import type { CommandContext } from "./context.js";
 import { confirmSignature } from "./send.js";
+import { formatTransactionReceipt } from "../output/transaction.js";
+import { shortenAddress } from "../output/human.js";
 
 /**
  * SPL/Token-2022 transfer handler.
@@ -213,7 +215,7 @@ export async function sendToken(
   };
   context.output.preflight(
     { ok: true, preflight: summary },
-    `Action:       Send token\nMint:         ${mint}\nRaw amount:   ${rawAmount}\nUI amount:    ${formatUnits(rawAmount, mintInfo.decimals)}\nDestination:  ${destinationOwner}\nDestination ATA: ${destinationAta}\nATA cost:     ${formatSol(ataCreationCost)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
+    `Action:       Send token\nWallet:       ${owner}\nMint:         ${mint}\nAmount:       ${formatUnits(rawAmount, mintInfo.decimals)}\nDestination:  ${destinationOwner}\nDestination ATA: ${destinationAta}\nATA cost:     ${formatSol(ataCreationCost)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nNetwork:      ${context.config.cluster}`,
   );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
@@ -239,8 +241,8 @@ export async function sendToken(
     !yes &&
     !(await confirm(
       context.config.cluster === "mainnet"
-        ? "You are about to submit a MAINNET transaction. Proceed?"
-        : "Submit this transaction?",
+        ? `Send ${formatUnits(rawAmount, mintInfo.decimals)} tokens (${shortenAddress(mint)}) from ${selectedWallet.identity.alias} (${shortenAddress(owner)}) to ${shortenAddress(destinationOwner)} on MAINNET?`
+        : `Send ${formatUnits(rawAmount, mintInfo.decimals)} tokens (${shortenAddress(mint)}) from ${selectedWallet.identity.alias} (${shortenAddress(owner)}) to ${shortenAddress(destinationOwner)} on devnet?`,
     ))
   )
     throw new TransactionRejectedError();
@@ -258,6 +260,7 @@ export async function sendToken(
     String(signature),
     context.config.commitment,
     latest.value.lastValidBlockHeight,
+    !context.output.json && Boolean(process.stderr.isTTY),
   );
   context.output.print(
     {
@@ -266,7 +269,20 @@ export async function sendToken(
       slot: status.slot,
       status: status.confirmationStatus,
     },
-    `Transaction confirmed: ${signature}`,
+    formatTransactionReceipt({
+      action: "Token transfer",
+      wallet: selectedWallet.identity,
+      cluster: context.config.cluster,
+      confirmation: status.confirmationStatus,
+      slot: status.slot,
+      signature: String(signature),
+      details: [
+        ["Mint", String(mint)],
+        ["Amount", `${formatUnits(rawAmount, mintInfo.decimals)} tokens`],
+        ["Destination", String(destinationOwner)],
+        ["Estimated network fee", `~${formatSol(fee)} SOL`],
+      ],
+    }),
   );
 }
 

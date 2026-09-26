@@ -120,11 +120,15 @@ class DockerReplTests(unittest.TestCase):
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
             Handler.state.transactions.clear()
-            child.sendline("send 11111111111111111111111111111112 1 --yes")
+            child.sendline("send 11111111111111111111111111111112 1")
             child.expect("Wallet: vault")
+            child.expect("Send 1 SOL from vault")
+            child.sendline("y")
             child.expect("Passphrase for vault")
             child.sendline("secondary test passphrase")
-            child.expect("Transaction confirmed")
+            child.expect("Waiting for transaction confirmation")
+            child.expect("SOL transfer confirmed")
+            child.expect("Explorer: https://explorer.solana.com/tx/")
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
             child.sendline(
@@ -133,7 +137,8 @@ class DockerReplTests(unittest.TestCase):
             )
             child.expect("Passphrase for vault")
             child.sendline("secondary test passphrase")
-            child.expect("Transaction confirmed")
+            child.expect("Token transfer confirmed")
+            child.expect("Explorer: https://explorer.solana.com/tx/")
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
             child.sendline(
@@ -141,7 +146,7 @@ class DockerReplTests(unittest.TestCase):
             )
             child.expect("Passphrase for vault")
             child.sendline("secondary test passphrase")
-            child.expect("Stake created and delegated")
+            child.expect("Stake delegation confirmed")
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
             child.send("stake ")

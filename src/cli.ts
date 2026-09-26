@@ -10,19 +10,16 @@
  * output, or error handling paths.
  */
 import { pathToFileURL } from "node:url";
-import { loadConfig, type ConfigOverrides } from "./config/config.js";
+import type { ConfigOverrides } from "./config/config.js";
 import { clusterSchema, commitmentSchema } from "./config/schema.js";
 import { asAppError, ConfigError, redact } from "./errors/errors.js";
-import { createCommandContext } from "./commands/context.js";
-import { executeLine } from "./commands/execute.js";
-import { runRepl } from "./shell/repl.js";
-import { stringifyJson } from "./output/json.js";
-import { selectWallet } from "./wallet/store.js";
 import { hasFlag, parseCommand } from "./shell/parser.js";
+import type { selectWallet as selectWalletType } from "./wallet/store.js";
 
 interface StartupOptions extends ConfigOverrides {
   command?: string;
   wallet?: string;
+  help: boolean;
   json: boolean;
   dryRun: boolean;
   yes: boolean;
@@ -32,6 +29,7 @@ interface StartupOptions extends ConfigOverrides {
 function parseArgs(argv: string[]): StartupOptions {
   const options: StartupOptions = {
     json: false,
+    help: false,
     dryRun: false,
     yes: false,
     verbose: false,
@@ -44,7 +42,8 @@ function parseArgs(argv: string[]): StartupOptions {
         throw new ConfigError(`${arg} requires a value.`);
       return value;
     };
-    if (arg === "-c" || arg === "--command") options.command = next();
+    if (arg === "-h" || arg === "--help") options.help = true;
+    else if (arg === "-c" || arg === "--command") options.command = next();
     else if (arg === "--wallet") {
       if (options.wallet !== undefined)
         throw new ConfigError("--wallet may be specified only once.");
@@ -74,10 +73,20 @@ function parseArgs(argv: string[]): StartupOptions {
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   try {
     const options = parseArgs(argv);
+    if (options.help) {
+      process.stdout.write(startupHelpText());
+      return 0;
+    }
     if (options.json && options.command === undefined)
       throw new ConfigError("--json requires a one-shot command with -c.");
+    const [{ loadConfig }, { selectWallet }, { createCommandContext }] =
+      await Promise.all([
+        import("./config/config.js"),
+        import("./wallet/store.js"),
+        import("./commands/context.js"),
+      ]);
     const config = await loadConfig(options);
-    let selected: Awaited<ReturnType<typeof selectWallet>> | undefined;
+    let selected: Awaited<ReturnType<typeof selectWalletType>> | undefined;
     let walletStoreError;
     try {
       selected = await selectWallet(config, options.wallet);
@@ -106,13 +115,16 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     );
     context.walletStoreError = walletStoreError;
     if (options.command !== undefined) {
+      const { executeLine } = await import("./commands/execute.js");
       await executeLine(context, options.command);
       return 0;
     }
+    const { runRepl } = await import("./shell/repl.js");
     return await runRepl(context);
   } catch (error) {
     const appError = asAppError(error);
-    if (parseJsonFlag(argv))
+    if (parseJsonFlag(argv)) {
+      const { stringifyJson } = await import("./output/json.js");
       process.stderr.write(
         `${stringifyJson({
           ok: false,
@@ -121,9 +133,13 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           ...(appError.details ? { details: redact(appError.details) } : {}),
         })}\n`,
       );
-    else process.stderr.write(`Error: ${appError.message}\n`);
+    } else process.stderr.write(`Error: ${appError.message}\n`);
     return appError.exitCode;
   }
+}
+
+function startupHelpText(): string {
+  return `Solana Wallet CLI\n\nUsage: sol-wallet [options]\n\nOptions:\n  -h, --help                 Show this help\n  -c, --command <command>   Run one command and exit\n      --wallet <alias>      Select a wallet for this process\n      --cluster <network>   Select mainnet or devnet\n      --rpc-url <url>       Use a custom RPC endpoint\n      --commitment <level>  processed, confirmed, or finalized\n      --json                Emit machine-readable output (requires -c)\n      --dry-run             Simulate writes without broadcasting\n      --yes                 Skip confirmation after validation and simulation\n      --verbose             Include technical details where available\n\nExamples:\n  sol-wallet\n  sol-wallet --wallet savings\n  sol-wallet -c "status" --json\n\nInside the interactive shell, type help [topic] to see commands.\n`;
 }
 
 function parseJsonFlag(argv: string[]): boolean {

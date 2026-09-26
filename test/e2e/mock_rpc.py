@@ -125,6 +125,8 @@ class Handler(BaseHTTPRequestHandler):
                 ],
                 "delinquent": [],
             }
+        elif method == "getProgramAccounts":
+            result = []
         elif method == "getStakeMinimumDelegation":
             result = {"value": 1}
         elif method == "getMinimumBalanceForRentExemption":

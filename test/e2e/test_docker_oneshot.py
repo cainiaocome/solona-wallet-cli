@@ -151,6 +151,9 @@ class DockerOneShotTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["wallet"]["alias"], "secondary")
         self.assertEqual(payload["defaultWallet"]["alias"], "primary")
+        self.assertEqual(payload["health"], "healthy")
+        self.assertEqual(payload["balances"]["sol"]["amount"], "10")
+        self.assertEqual(payload["positions"]["jupiterLend"]["status"], "not_supported")
 
     def test_invalid_startup_wallet_fails_without_rpc_fallback(self):
         Handler.state.methods.clear()

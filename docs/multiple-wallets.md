@@ -30,7 +30,8 @@ Later imports do not change the current or default wallet. They print a
 selection command after success. Aliases are 1–32 lowercase characters, start
 with a letter, and contain only letters, numbers, `_`, and `-`.
 
-List registered wallets without querying Solana:
+List registered wallets and inspect local wallet metadata without querying
+Solana:
 
 ```text
 wallet list
@@ -41,16 +42,29 @@ status
 The list marks the current and default wallet separately, aligns its columns to
 the longest alias and address, and displays each full address. `wallet info`
 reads public metadata without asking for a passphrase and aligns its labels.
-`status` displays the current wallet, saved default, network, RPC URL, and
-commitment. Status is a local configuration summary; it does not check RPC
-health or fetch a balance.
+`show config` displays local network/RPC preferences. `status` is the on-demand
+overview: it verifies that the configured RPC responds on the selected network
+and fetches the current wallet's SOL and non-zero SPL/Token-2022 token balances.
+It groups token accounts by mint and reports account counts; use
+`token list --accounts` for individual token accounts. It also summarizes
+native stake and, on mainnet, Jupiter Lend USDC in a separate positions section;
+these are never added to liquid balances. Jupiter Lend is marked mainnet-only
+on devnet.
+
+Status keeps local wallet/network context when a chain read fails and marks the
+affected section unavailable, never zero. `healthy`, `degraded`, and
+`unavailable` describe the RPC and balance-read results. Status does not unlock
+the private key. Inspect full stake and lending details with `stake list` and
+`jupiter-lend status`.
 
 If UUID-named key files are present but unregistered, `wallet list` shows their
 IDs separately for review and recovery. An invalid unregistered path remains
 visible there without blocking healthy registered wallets.
 
 At interactive startup and in each prompt the CLI shows the alias and shortened
-address. Before a transaction, it shows the selected alias, full source address,
+address. Startup does not query RPC; run `status` when you want a fresh balance
+overview. With no wallet selected, the greeting suggests importing or choosing
+one. Before a transaction, it shows the selected alias, full source address,
 and network. Read the full address carefully before approving a mainnet action.
 Aliases help you recognize wallets but are not used as signing identities.
 

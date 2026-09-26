@@ -10,14 +10,16 @@ read the documents in this order:
    and lending.
 3. [Command cookbook](command-cookbook.md) — practical examples, what each
    command changes, and how to automate JSON output.
-4. [Multiple wallets](multiple-wallets.md) — aliases, current/default selection,
+4. [Understanding CLI output](command-output.md) — startup, status, balance
+   tables, confirmations, receipts, human output, and JSON behavior.
+5. [Multiple wallets](multiple-wallets.md) — aliases, current/default selection,
    migration, backups, and recovery.
-5. [Architecture](architecture.md) — how a command travels through the source
+6. [Architecture](architecture.md) — how a command travels through the source
    code and where to look when learning or changing the project.
-6. [Security and testing](security-and-testing.md) — what the wallet protects,
+7. [Security and testing](security-and-testing.md) — what the wallet protects,
    what it cannot protect, how to test without real funds, and how CI validates
    the Docker image.
-7. [Supply-chain controls](supply-chain.md) — how the lockfile, release-age
+8. [Supply-chain controls](supply-chain.md) — how the lockfile, release-age
    policy, CI, Docker build, and dependency updates work together.
 
 The more focused reference documents are also useful:

@@ -1,7 +1,8 @@
 import { address, type Address } from "@solana/kit";
-import { formatSol, formatUnits } from "../solana/amounts.js";
+import { formatSol } from "../solana/amounts.js";
+import { table } from "../output/human.js";
 import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
-import { getTokenAccounts } from "../solana/tokens.js";
+import { aggregateTokenAccounts, getTokenAccounts } from "../solana/tokens.js";
 import { listValidators } from "../solana/validators.js";
 import { readHistory } from "../shell/history.js";
 import { resolveWallet, type SelectedWallet } from "../wallet/store.js";
@@ -41,7 +42,7 @@ export async function showAddress(context: CommandContext): Promise<void> {
   const wallet = selected.identity.address;
   context.output.print(
     { ok: true, address: wallet, cluster: context.config.cluster },
-    `Address: ${wallet}\nCluster: ${context.config.cluster}`,
+    `Wallet: ${wallet}\nNetwork: ${context.config.cluster}`,
   );
 }
 
@@ -63,11 +64,14 @@ export async function showBalance(context: CommandContext): Promise<void> {
   };
   context.output.print(
     data,
-    `Address:  ${wallet}\nCluster:  ${context.config.cluster}\nBalance:  ${formatSol(lamports)} SOL\nLamports: ${lamports}`,
+    `Wallet: ${wallet}\nNetwork: ${context.config.cluster}\nSOL balance: ${formatSol(lamports)} SOL${context.output.verbose ? `\nLamports: ${lamports}` : ""}`,
   );
 }
 
-export async function showTokenList(context: CommandContext): Promise<void> {
+export async function showTokenList(
+  context: CommandContext,
+  includeAccounts = false,
+): Promise<void> {
   const wallet = await requireWallet(context);
   const rpc = context.getClient().rpc;
   await assertRpcCluster(rpc, context.config.cluster);
@@ -85,15 +89,32 @@ export async function showTokenList(context: CommandContext): Promise<void> {
     cluster: context.config.cluster,
     accounts,
   };
-  const human = accounts.length
-    ? accounts
-        .map(
-          (account) =>
-            `${account.mint}  ${account.program}  ${account.address}  ${account.uiAmount}  decimals=${account.decimals} raw=${account.rawAmount}`,
+  const balances = aggregateTokenAccounts(accounts);
+  const tokenRows = balances.length
+    ? includeAccounts
+      ? table(
+          accounts.map((account) => [
+            account.mint,
+            account.uiAmount,
+            account.program,
+            account.address,
+          ]),
+          ["MINT", "ACCOUNT BALANCE", "TOKEN PROGRAM", "TOKEN ACCOUNT"],
         )
-        .join("\n")
-    : "No SPL or Token-2022 accounts found.";
-  context.output.print(data, human);
+      : table(
+          balances.map((balance) => [
+            balance.mint,
+            balance.amount,
+            balance.program,
+            String(balance.accountCount),
+          ]),
+          ["MINT", "BALANCE", "TOKEN PROGRAM", "ACCOUNTS"],
+        )
+    : "No SPL or Token-2022 token accounts found.";
+  context.output.print(
+    data,
+    `Network: ${context.config.cluster}\n${tokenRows}`,
+  );
 }
 
 export async function showTokenBalance(
@@ -121,18 +142,24 @@ export async function showTokenBalance(
       decimals: null,
       amount: "0",
     };
-    context.output.print(data, `0 ${mint}`);
+    context.output.print(
+      data,
+      `Network: ${context.config.cluster}\nToken balance: 0\nMint: ${mint}\nNo token account found for this mint.`,
+    );
     return;
   }
-  const rawAmount = matches.reduce(
-    (sum, account) => sum + account.rawAmount,
-    0n,
-  );
-  const decimals = matches[0]!.decimals;
-  const amount = formatUnits(rawAmount, decimals);
+  const balance = aggregateTokenAccounts(matches)[0]!;
   context.output.print(
-    { ok: true, address: wallet, mint, rawAmount, decimals, amount },
-    `${amount} ${mint}`,
+    {
+      ok: true,
+      address: wallet,
+      mint,
+      rawAmount: balance.rawAmount,
+      decimals: balance.decimals,
+      amount: balance.amount,
+      accountCount: balance.accountCount,
+    },
+    `Network: ${context.config.cluster}\nToken balance: ${balance.amount}\nMint: ${mint}\nToken accounts: ${balance.accountCount}${context.output.verbose ? `\nRaw amount: ${balance.rawAmount}` : ""}`,
   );
 }
 
@@ -151,14 +178,19 @@ export async function showValidators(
       sort: "activatedStake descending",
       validators: rows,
     },
-    rows.length
-      ? rows
-          .map(
-            (row) =>
-              `${row.status.padEnd(10)} ${row.voteAccount}  commission=${row.commission}%  stake=${formatSol(row.activatedStake)} SOL`,
-          )
-          .join("\n")
-      : "No validators matched the filters.",
+    `Network: ${context.config.cluster}\n` +
+      (rows.length
+        ? table(
+            rows.map((row) => [
+              row.status,
+              `${row.commission}%`,
+              `${formatSol(row.activatedStake)} SOL`,
+              row.voteAccount,
+            ]),
+            ["STATUS", "COMMISSION", "ACTIVATED STAKE", "VOTE ACCOUNT"],
+          ) +
+          "\nVote-account addresses are shown in full for use with stake create."
+        : "No validators matched the filters."),
   );
 }
 

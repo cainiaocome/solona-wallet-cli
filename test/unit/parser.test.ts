@@ -9,6 +9,7 @@ import {
   readHistory,
 } from "../../src/shell/history.js";
 import { parseCommand, tokenize } from "../../src/shell/parser.js";
+import { helpText } from "../../src/shell/help.js";
 
 describe("wallet shell parser and completion", () => {
   it("supports quotes, escaped whitespace, and flag=value", () => {
@@ -28,6 +29,7 @@ describe("wallet shell parser and completion", () => {
       tokenMints: [],
       stakeAccounts: [],
       recentValidators: [],
+      walletAliases: [],
     });
     expect(topLevel[0]).toContain("token");
     expect(topLevel[1]).toBe("tok");
@@ -36,6 +38,7 @@ describe("wallet shell parser and completion", () => {
         tokenMints: [],
         stakeAccounts: [],
         recentValidators: [],
+        walletAliases: [],
       })[0],
     ).toEqual(["list", "balance", "send"]);
     expect(
@@ -43,6 +46,7 @@ describe("wallet shell parser and completion", () => {
         tokenMints: ["Mint111"],
         stakeAccounts: [],
         recentValidators: [],
+        walletAliases: [],
       })[0],
     ).toEqual(["Mint111"]);
     expect(
@@ -50,6 +54,7 @@ describe("wallet shell parser and completion", () => {
         tokenMints: [],
         stakeAccounts: [],
         recentValidators: [],
+        walletAliases: [],
       })[0],
     ).toEqual(["create", "list", "deactivate", "withdraw"]);
     expect(
@@ -57,8 +62,29 @@ describe("wallet shell parser and completion", () => {
         tokenMints: [],
         stakeAccounts: [],
         recentValidators: [],
+        walletAliases: [],
       })[0],
     ).toEqual(["status", "deposit", "withdraw"]);
+  });
+
+  it("completes supported validators and token-list flags", () => {
+    const cache = {
+      tokenMints: [],
+      stakeAccounts: [],
+      recentValidators: [],
+      walletAliases: [],
+    };
+    expect(completeLine("validators --inc", cache)[0]).toContain(
+      "--include-delinquent",
+    );
+    expect(completeLine("token list --acc", cache)[0]).toEqual(["--accounts"]);
+  });
+
+  it("keeps general and topic help aligned with the wallet and status commands", () => {
+    expect(helpText()).toContain("wallet recover <uuid> <alias>");
+    expect(helpText("wallet")).toContain("wallet migrate <alias>");
+    expect(helpText("status")).toContain("non-zero token balances");
+    expect(helpText("token")).toContain("--accounts");
   });
 
   it("filters secret-looking lines from history", () => {

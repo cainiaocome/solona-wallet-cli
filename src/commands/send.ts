@@ -24,6 +24,8 @@ import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 import { requireWallet } from "./read-only.js";
 import { requireSelectedWallet } from "./read-only.js";
 import type { CommandContext } from "./context.js";
+import { formatTransactionReceipt } from "../output/transaction.js";
+import { shortenAddress } from "../output/human.js";
 
 /**
  * SOL transfer command.
@@ -94,7 +96,7 @@ export async function sendSol(
     cluster: context.config.cluster,
     dryRun,
   };
-  const human = `Action:       Send SOL\nFrom:         ${source}\nTo:           ${destination}\nAmount:       ${formatSol(lamports)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`;
+  const human = `Action:       Send SOL\nWallet:       ${source}\nTo:           ${destination}\nAmount:       ${formatSol(lamports)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nNetwork:      ${context.config.cluster}`;
   context.output.preflight({ ok: true, preflight: summary }, human);
 
   const simulation = await rpcRequest(
@@ -121,8 +123,8 @@ export async function sendSol(
     !yes &&
     !(await confirm(
       context.config.cluster === "mainnet"
-        ? "You are about to submit a MAINNET transaction. Proceed?"
-        : "Submit this transaction?",
+        ? `Send ${formatSol(lamports)} SOL from ${selectedWallet.identity.alias} (${shortenAddress(source)}) to ${shortenAddress(destination)} on MAINNET?`
+        : `Send ${formatSol(lamports)} SOL from ${selectedWallet.identity.alias} (${shortenAddress(source)}) to ${shortenAddress(destination)} on devnet?`,
     ))
   )
     throw new TransactionRejectedError();
@@ -140,6 +142,7 @@ export async function sendSol(
     String(signature),
     context.config.commitment,
     latest.value.lastValidBlockHeight,
+    !context.output.json && Boolean(process.stderr.isTTY),
   );
   context.output.print(
     {
@@ -148,7 +151,20 @@ export async function sendSol(
       slot: status.slot,
       status: status.confirmationStatus,
     },
-    `Transaction confirmed: ${signature}`,
+    formatTransactionReceipt({
+      action: "SOL transfer",
+      wallet: selectedWallet.identity,
+      cluster: context.config.cluster,
+      confirmation: status.confirmationStatus,
+      slot: status.slot,
+      signature: String(signature),
+      details: [
+        ["From", String(source)],
+        ["To", String(destination)],
+        ["Amount", `${formatSol(lamports)} SOL`],
+        ["Estimated network fee", `~${formatSol(fee)} SOL`],
+      ],
+    }),
   );
 }
 
@@ -157,12 +173,20 @@ export async function confirmSignature(
   signature: string,
   commitment: "processed" | "confirmed" | "finalized",
   lastValidBlockHeight?: bigint,
+  showProgress = false,
 ): Promise<{
   slot: bigint;
   confirmationStatus: "processed" | "confirmed" | "finalized";
 }> {
+  let showedProgress = false;
   try {
     for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (showProgress && attempt === 0) {
+        process.stderr.write("Waiting for transaction confirmation");
+        showedProgress = true;
+      } else if (showProgress && attempt > 0 && attempt % 4 === 0) {
+        process.stderr.write(".");
+      }
       const response = await rpcRequest(
         rpc.getSignatureStatuses([signature as never], {
           searchTransactionHistory: true,
@@ -207,6 +231,8 @@ export async function confirmSignature(
       `Unable to confirm transaction. Query signature ${signature} before retrying. ${message}`,
       { signature, cause: message },
     );
+  } finally {
+    if (showedProgress) process.stderr.write("\n");
   }
 }
 

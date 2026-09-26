@@ -38,13 +38,17 @@ export async function runRepl(context: CommandContext): Promise<number> {
         process.stdout.write(
           `Default wallet: ${defaultWallet.alias} (${shortenAddress(defaultWallet.address)})\n`,
         );
+      if (!selected)
+        process.stdout.write(
+          "No wallet selected. Start with `wallet import <alias>`, or run `wallet list` to choose an existing wallet.\n",
+        );
     } catch {
       process.stdout.write(
         "Wallet: wallet store needs attention; use wallet migrate/recover or read docs/multiple-wallets.md\n",
       );
     }
     process.stdout.write(
-      `Network: ${context.config.cluster}\nType \`help\` for commands.\n\n`,
+      `Network: ${context.config.cluster.toUpperCase()}${context.config.cluster === "mainnet" ? " (real funds)" : ""}\nType \`help\` for commands, or \`status\` to refresh wallet balances.\n\n`,
     );
   }
 

@@ -6,6 +6,50 @@ import { createCommandContext } from "../../src/commands/context.js";
 import { executeLine } from "../../src/commands/execute.js";
 
 describe("validators command filtering", () => {
+  it("prints a labeled table with the full vote-account address", async () => {
+    const configDir = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-validators-human-"),
+    );
+    const output: string[] = [];
+    try {
+      const context = createCommandContext(
+        {
+          configDir,
+          cluster: "mainnet",
+          rpcUrl: "https://api.mainnet.solana.com",
+          commitment: "confirmed",
+        },
+        { json: false, verbose: false },
+      );
+      context.getClient = () =>
+        ({
+          rpc: {
+            getGenesisHash: () => request(MAINNET_GENESIS),
+            getVoteAccounts: () =>
+              request({
+                current: [validator(CURRENT_VOTE, 200n)],
+                delinquent: [],
+              }),
+          },
+        }) as never;
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        output.push(String(chunk));
+        return true;
+      });
+
+      await executeLine(context, "validators");
+
+      const rendered = output.join("");
+      expect(rendered).toContain("STATUS");
+      expect(rendered).toContain("COMMISSION");
+      expect(rendered).toContain("ACTIVATED STAKE");
+      expect(rendered).toContain(CURRENT_VOTE);
+    } finally {
+      vi.restoreAllMocks();
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+
   it("hides delinquent validators by default and includes them on request", async () => {
     const configDir = await mkdtemp(
       path.join(os.tmpdir(), "sol-wallet-validators-"),

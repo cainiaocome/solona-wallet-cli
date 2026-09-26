@@ -13,6 +13,7 @@ import {
 import { helpText } from "../shell/help.js";
 import { readHistory } from "../shell/history.js";
 import { Output } from "../output/output.js";
+import { transactionExplorerUrl } from "../output/transaction.js";
 import { importWallet } from "./wallet-import.js";
 import { migrateWallet, recoverWallet } from "./wallet-import.js";
 import {
@@ -164,7 +165,7 @@ export async function executeParsed(
         rejectExtraArgs(
           command,
           0,
-          "validators [--limit <n>] [--current-only] [--max-commission <percent>]",
+          "validators [--limit <n>] [--include-delinquent] [--max-commission <percent>]",
         );
         await showValidators(context, {
           limit: parseOptionalInteger(flagValue(command, "limit"), "limit", 1),
@@ -330,7 +331,7 @@ async function executeToken(
   const args = { ...command, args: command.args.slice(1) };
   if (subcommand === "list") {
     rejectExtraArgs(args, 0, "token list");
-    await showTokenList(context);
+    await showTokenList(context, hasFlag(command, "accounts"));
   } else if (subcommand === "balance") {
     rejectExtraArgs(args, 1, "token balance <mint>");
     await showTokenBalance(context, args.args[0]!);
@@ -453,15 +454,70 @@ async function executeTx(
   );
   context.output.print(
     { ok: true, signature: command.args[1], transaction: response },
-    response
-      ? JSON.stringify(
-          response,
-          (_, value) => (typeof value === "bigint" ? value.toString() : value),
-          2,
-        )
-      : "Transaction not found.",
+    formatTransactionSummary(
+      command.args[1]!,
+      response,
+      context.config.cluster,
+    ),
   );
   return { exit: false };
+}
+
+function formatTransactionSummary(
+  signature: string,
+  response: unknown,
+  cluster: string,
+): string {
+  if (!response)
+    return `Transaction not found on ${cluster}. Check that the signature and network are correct, or inspect the complete response with --json.`;
+  const transaction = response as {
+    slot?: bigint | number | string;
+    blockTime?: bigint | number | null;
+    transaction?: {
+      message?: {
+        accountKeys?: Array<string | { pubkey?: string; signer?: boolean }>;
+        header?: { numRequiredSignatures?: number };
+        instructions?: unknown[];
+      };
+    };
+    meta?: { err?: unknown; fee?: bigint | number | string | null } | null;
+  };
+  const metadata = transaction.meta;
+  const message = transaction.transaction?.message;
+  const accountKeys = message?.accountKeys ?? [];
+  const annotatedSigners = accountKeys
+    .filter((key) => typeof key !== "string" && key.signer)
+    .map((key) => (typeof key === "string" ? key : (key.pubkey ?? "unknown")));
+  const signers = annotatedSigners.length
+    ? annotatedSigners
+    : accountKeys
+        .slice(0, message?.header?.numRequiredSignatures ?? 0)
+        .map((key) =>
+          typeof key === "string" ? key : (key.pubkey ?? "unknown"),
+        );
+  const fee = metadata?.fee;
+  const lines = [
+    "Transaction found",
+    `Network: ${cluster}`,
+    `Result: ${metadata ? (metadata.err ? "failed on-chain" : "successful") : "execution details unavailable"}`,
+    ...(transaction.slot !== undefined ? [`Slot: ${transaction.slot}`] : []),
+    ...(transaction.blockTime !== undefined && transaction.blockTime !== null
+      ? [
+          `Block time: ${new Date(Number(transaction.blockTime) * 1000).toISOString()}`,
+        ]
+      : []),
+    ...(fee !== undefined && fee !== null
+      ? [`Network fee: ${formatSol(BigInt(fee))} SOL`]
+      : []),
+    `Signers: ${signers.length ? signers.join(", ") : "not provided by RPC"}`,
+    `Instructions: ${transaction.transaction?.message?.instructions?.length ?? "unknown"}`,
+    `Signature: ${signature}`,
+    `Explorer: ${transactionExplorerUrl(signature, cluster)}`,
+    "Use --json for the complete RPC transaction details.",
+  ];
+  if (metadata?.err)
+    lines.splice(3, 0, `On-chain error: ${JSON.stringify(metadata.err)}`);
+  return lines.join("\n");
 }
 
 function displayTopicHelp(context: CommandContext, topic: string): void {
@@ -529,6 +585,8 @@ function validateFlags(command: ParsedCommand): void {
     allowed.add("max-commission");
   } else if (name === "wallet" && subcommand === "import") {
     allowed.add("keypair-file");
+  } else if (name === "token" && subcommand === "list") {
+    allowed.add("accounts");
   } else if (name === "token" && subcommand === "send") {
     allowed.add("dry-run");
     allowed.add("yes");
@@ -556,6 +614,7 @@ function validateFlags(command: ParsedCommand): void {
     "yes",
     "current-only",
     "include-delinquent",
+    "accounts",
     "all",
   ]);
   const valueFlags = new Set([

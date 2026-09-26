@@ -88,6 +88,9 @@ export async function importWallet(
     if (result.first && context.session.currentWalletId === null)
       context.session.currentWalletId = result.entry.id;
     const registry = await readRegistry(context.config.configDir);
+    const currentAlias = registry.wallets.find(
+      (wallet) => wallet.id === context.session.currentWalletId,
+    )?.alias;
     context.output.print(
       {
         ok: true,
@@ -98,7 +101,7 @@ export async function importWallet(
         defaultWalletId: registry.defaultWalletId,
         changed: true,
       },
-      `Wallet '${alias}' imported. Address: ${publicKey}${result.first ? "\nIt is now the current and default wallet." : `\nSelect it with: wallet use ${alias}`}`,
+      `Wallet '${alias}' imported. Address: ${publicKey}${result.first ? "\nIt is now the current and default wallet." : `\nIt is not selected; current wallet remains '${currentAlias ?? "none"}'.\nSwitch to it with: wallet use ${alias}`}`,
     );
   } finally {
     secret.fill(0);

@@ -23,6 +23,12 @@ scripts/sol-wallet
 scripts/sol-wallet -c "balance" --json
 ```
 
+Run `sol-wallet --help` for startup options. At interactive startup the CLI
+shows the selected wallet and network without contacting the RPC; use `status`
+for an on-demand network check, SOL/token balances, and separate staking/lending
+position summaries. The wallet is not unlocked at startup—signing commands
+request its passphrase when needed.
+
 The wrapper defaults to `ghcr.io/cainiaocome/sol-wallet:master`, which follows
 the latest image published from the `master` branch. Set `SOL_WALLET_IMAGE` to
 use a fork, a version tag, or a specific seven-character commit tag. Set
@@ -82,6 +88,7 @@ wallet info daily
 address
 balance
 token list
+token list --accounts
 token balance <mint>
 token send <mint> <destination> <amount>
 send <destination> <amount>
@@ -141,4 +148,4 @@ npm test
 
 Opt-in Solana integration tests use `RUN_SOLANA_INTEGRATION=1` and must never use a real developer wallet. Docker E2E tests exercise the built image through a PTY and deterministic mock RPC; set `SOL_WALLET_E2E_IMAGE` to the image under test.
 
-Beginner-friendly documentation is indexed in [docs/README.md](docs/README.md). Start with [docs/getting-started.md](docs/getting-started.md), then read [docs/web3-concepts.md](docs/web3-concepts.md), [docs/command-cookbook.md](docs/command-cookbook.md), and the [multiple-wallet guide](docs/multiple-wallets.md). The deeper references are [docs/architecture.md](docs/architecture.md), [docs/security-and-testing.md](docs/security-and-testing.md), [docs/implementation.md](docs/implementation.md), and [docs/jupiter-lend.md](docs/jupiter-lend.md).
+Beginner-friendly documentation is indexed in [docs/README.md](docs/README.md). Start with [docs/getting-started.md](docs/getting-started.md), then read [docs/web3-concepts.md](docs/web3-concepts.md), [docs/command-cookbook.md](docs/command-cookbook.md), [Understanding CLI output](docs/command-output.md), and the [multiple-wallet guide](docs/multiple-wallets.md). The deeper references are [docs/architecture.md](docs/architecture.md), [docs/security-and-testing.md](docs/security-and-testing.md), [docs/implementation.md](docs/implementation.md), and [docs/jupiter-lend.md](docs/jupiter-lend.md).

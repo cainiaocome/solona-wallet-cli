@@ -25,6 +25,15 @@ export interface TokenAccount {
   uiAmount: string;
 }
 
+export interface TokenBalance {
+  mint: string;
+  program: TokenAccount["program"];
+  decimals: number;
+  rawAmount: bigint;
+  amount: string;
+  accountCount: number;
+}
+
 function tokenProgramName(program: Address): TokenAccount["program"] {
   return program === TOKEN_2022_PROGRAM_ADDRESS ? "token-2022" : "spl-token";
 }
@@ -105,6 +114,43 @@ export async function getTokenAccounts(
       accounts.push(parseAccount(account, program));
   }
   return accounts;
+}
+
+/**
+ * Combine a wallet's token accounts without floating point. A mint with
+ * inconsistent RPC metadata is rejected rather than silently mis-scaled.
+ */
+export function aggregateTokenAccounts(
+  accounts: readonly TokenAccount[],
+): TokenBalance[] {
+  const balances = new Map<string, TokenBalance>();
+  for (const account of accounts) {
+    const existing = balances.get(account.mint);
+    if (existing) {
+      if (
+        existing.decimals !== account.decimals ||
+        existing.program !== account.program
+      )
+        throw new RpcError(
+          `Token accounts for mint ${account.mint} returned inconsistent metadata.`,
+        );
+      existing.rawAmount += account.rawAmount;
+      existing.accountCount += 1;
+      existing.amount = formatUnits(existing.rawAmount, existing.decimals);
+    } else {
+      balances.set(account.mint, {
+        mint: account.mint,
+        program: account.program,
+        decimals: account.decimals,
+        rawAmount: account.rawAmount,
+        amount: formatUnits(account.rawAmount, account.decimals),
+        accountCount: 1,
+      });
+    }
+  }
+  return [...balances.values()].sort((left, right) =>
+    left.mint.localeCompare(right.mint),
+  );
 }
 
 export type AppConfigCommitment = "processed" | "confirmed" | "finalized";

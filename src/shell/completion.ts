@@ -45,7 +45,14 @@ const nested: Record<string, string[]> = {
   show: ["config"],
 };
 const flags: Record<string, string[]> = {
-  validators: ["--limit", "--current-only", "--max-commission", "--json"],
+  validators: [
+    "--limit",
+    "--include-delinquent",
+    "--max-commission",
+    "--current-only",
+    "--json",
+  ],
+  "token list": ["--accounts", "--json"],
   send: ["--dry-run", "--yes", "--json"],
   "token send": ["--dry-run", "--yes", "--json"],
   "stake create": ["--validator", "--dry-run", "--yes", "--json"],
