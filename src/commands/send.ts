@@ -119,7 +119,7 @@ export async function sendSol(
   if (
     !yes &&
     !(await confirm(
-      context.config.cluster === "mainnet-beta"
+      context.config.cluster === "mainnet"
         ? "You are about to submit a MAINNET transaction. Proceed?"
         : "Submit this transaction?",
     ))

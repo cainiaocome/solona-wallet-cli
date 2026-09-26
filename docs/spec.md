@@ -92,7 +92,7 @@ The design should prefer a small attack surface and auditable code over feature 
   - deactivate stake
   - withdraw deactivated stake
 - configurable RPC endpoint
-- devnet and mainnet-beta
+- devnet and mainnet
 - transaction simulation
 - transaction confirmation
 - human-readable output
@@ -152,7 +152,7 @@ sol-wallet jupiter-lend withdraw --all
 
 Initial v0.2 scope:
 
-- mainnet-beta only
+- mainnet only
 - canonical Solana USDC only
 - Jupiter Lend Earn / supply side only
 - read current USDC lending position
@@ -566,29 +566,29 @@ launches a persistent wallet shell:
 ```text
 Solana Wallet CLI
 Wallet: 7abc...xyz
-Cluster: mainnet-beta
+Cluster: mainnet
 Type `help` for commands.
 
-sol-wallet [mainnet-beta]>
+sol-wallet [mainnet]>
 ```
 
 Example session:
 
 ```text
-sol-wallet [mainnet-beta]> balance
+sol-wallet [mainnet]> balance
 12.345678901 SOL
 
-sol-wallet [mainnet-beta]> token list
+sol-wallet [mainnet]> token list
 USDC   EPjF...Dt1v   1,250.42
 ...
 
-sol-wallet [mainnet-beta]> token balance EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+sol-wallet [mainnet]> token balance EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 1,250.42 USDC
 
-sol-wallet [mainnet-beta]> stake list
+sol-wallet [mainnet]> stake list
 ...
 
-sol-wallet [mainnet-beta]> exit
+sol-wallet [mainnet]> exit
 ```
 
 The shell should feel closer to IPython / a database shell than to repeatedly invoking Unix subcommands.
@@ -729,7 +729,7 @@ Add a small set of shell/session commands:
 
 ```text
 set
-set cluster <mainnet-beta|devnet>
+set cluster <mainnet|devnet>
 set rpc-url <url>
 set commitment <processed|confirmed|finalized>
 show config
@@ -784,13 +784,13 @@ A small explicit command grammar is preferable.
 Default prompt:
 
 ```text
-sol-wallet [mainnet-beta]>
+sol-wallet [mainnet]>
 ```
 
 If practical, include a shortened wallet address:
 
 ```text
-sol-wallet [mainnet-beta 7abc…xyz]>
+sol-wallet [mainnet 7abc…xyz]>
 ```
 
 Do not include:
@@ -805,7 +805,7 @@ Prompt rendering should be instant and offline.
 If the shell has no imported wallet yet:
 
 ```text
-sol-wallet [mainnet-beta no-wallet]>
+sol-wallet [mainnet no-wallet]>
 ```
 
 and read-only network commands that require an owner address should return a clear message suggesting:
@@ -1056,7 +1056,7 @@ Parse errors should suggest the nearest valid command when the match is unambigu
 Example:
 
 ```text
-sol-wallet [mainnet-beta]> tokne list
+sol-wallet [mainnet]> tokne list
 Unknown command: tokne
 Did you mean: token?
 ```
@@ -1104,7 +1104,7 @@ sol-wallet -c "balance" --cluster devnet --json
 Supported outer flags:
 
 ```text
---cluster <mainnet-beta|devnet>
+--cluster <mainnet|devnet>
 --rpc-url <url>
 --commitment <processed|confirmed|finalized>
 --json
@@ -1127,7 +1127,7 @@ override session defaults for that command only.
 Defaults:
 
 ```text
-cluster: mainnet-beta
+cluster: mainnet
 commitment: confirmed
 ```
 
@@ -1152,7 +1152,7 @@ built-in default
 Supported non-secret environment variables:
 
 ```env
-SOL_WALLET_CLUSTER=mainnet-beta
+SOL_WALLET_CLUSTER=mainnet
 SOL_WALLET_RPC_URL=
 SOL_WALLET_COMMITMENT=confirmed
 SOL_WALLET_CONFIG_DIR=
@@ -1545,7 +1545,7 @@ Human output:
 
 ```text
 Address:  <address>
-Cluster:  mainnet-beta
+Cluster:  mainnet
 Balance:  12.345678901 SOL
 Lamports: 12345678901
 ```
@@ -1555,7 +1555,7 @@ JSON output must use strings for bigint-like monetary values:
 ```json
 {
   "address": "...",
-  "cluster": "mainnet-beta",
+  "cluster": "mainnet",
   "lamports": "12345678901",
   "sol": "12.345678901"
 }
@@ -1596,7 +1596,7 @@ From:         ...
 To:           ...
 Amount:       1.25 SOL
 Network fee:  ~0.000005 SOL
-Cluster:      mainnet-beta
+Cluster:      mainnet
 ```
 
 For `--dry-run`:
@@ -1810,7 +1810,7 @@ Rent reserve:        ... SOL
 Total moved:         ... SOL
 Network fee:         ... SOL
 Stake account:       ...
-Cluster:             mainnet-beta
+Cluster:             mainnet
 ```
 
 Then simulate.
@@ -2149,7 +2149,7 @@ Treat this as an explicit product decision, not a configurable arbitrary mint in
 
 Before every value-moving operation:
 
-- verify cluster is `mainnet-beta`
+- verify cluster is `mainnet`
 - verify the configured mint equals the canonical USDC mint
 - verify mint owner/program information from chain data
 - verify decimals from chain data
@@ -2234,7 +2234,7 @@ Wallet:        ...
 Asset:         USDC
 Amount:        100 USDC
 Protocol:      Jupiter Lend
-Cluster:       mainnet-beta
+Cluster:       mainnet
 Network fee:   ...
 ```
 
@@ -2275,7 +2275,7 @@ Wallet:        ...
 Asset:         USDC
 Amount:        ...
 Protocol:      Jupiter Lend
-Cluster:       mainnet-beta
+Cluster:       mainnet
 Network fee:   ...
 ```
 

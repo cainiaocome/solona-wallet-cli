@@ -9,7 +9,7 @@ const HELP: Record<string, string> = {
   stake list | stake deactivate <stake-account> | stake withdraw <stake-account> [--amount n]
   jupiter-lend status | jupiter-lend deposit <amount> | jupiter-lend withdraw <amount> | jupiter-lend withdraw --all
   tx inspect <signature>
-  set cluster <mainnet-beta|devnet> | set rpc-url <url> | set commitment <level>
+  set cluster <mainnet|devnet> | set rpc-url <url> | set commitment <level>
   show config | history | clear | help | exit`,
   wallet: "wallet import [--keypair-file <path>]\nwallet info",
   show: "show config",
@@ -26,7 +26,7 @@ const HELP: Record<string, string> = {
   "jupiter-lend":
     "jupiter-lend status\njupiter-lend deposit <amount> [--dry-run] [--yes]\njupiter-lend withdraw <amount> [--dry-run] [--yes]\njupiter-lend withdraw --all [--dry-run] [--yes]",
   tx: "tx inspect <signature>",
-  set: "set cluster <mainnet-beta|devnet>\nset rpc-url <url>\nset commitment <processed|confirmed|finalized>",
+  set: "set cluster <mainnet|devnet>\nset rpc-url <url>\nset commitment <processed|confirmed|finalized>",
 };
 
 export function helpText(topic?: string): string {

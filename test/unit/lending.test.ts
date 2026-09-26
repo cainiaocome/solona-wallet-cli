@@ -44,7 +44,7 @@ describe("Jupiter Lend USDC boundary", () => {
           commitment: "confirmed",
           configDir: "/tmp",
         }),
-    ).toThrow(/mainnet-beta/);
+    ).toThrow(/mainnet/);
   });
 
   it("reads protocol availability and caps it at the user's supplied assets", async () => {
@@ -80,8 +80,8 @@ describe("Jupiter Lend USDC boundary", () => {
     };
     const adapter = new JupiterLendAdapter(
       {
-        cluster: "mainnet-beta",
-        rpcUrl: "https://api.mainnet-beta.solana.com",
+        cluster: "mainnet",
+        rpcUrl: "https://api.mainnet.solana.com",
         commitment: "confirmed",
         configDir: "/tmp",
       },

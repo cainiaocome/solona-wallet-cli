@@ -23,7 +23,7 @@ The asset is hard-coded to canonical mainnet Solana USDC:
 EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 ```
 
-Before every operation the adapter requires `mainnet-beta`, verifies the mint is owned by the legacy SPL Token Program, and verifies six decimals. A display symbol or user-selected mint is never used as the asset identity. Borrowing, collateral, leverage, liquidation, arbitrary assets, and arbitrary Jupiter transaction signing are not implemented.
+Before every operation the adapter requires `mainnet`, verifies the mint is owned by the legacy SPL Token Program, and verifies six decimals. A display symbol or user-selected mint is never used as the asset identity. Borrowing, collateral, leverage, liquidation, arbitrary assets, and arbitrary Jupiter transaction signing are not implemented.
 
 ## SDK boundary
 

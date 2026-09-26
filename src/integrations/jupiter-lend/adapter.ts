@@ -113,9 +113,9 @@ export class JupiterLendAdapter {
     private readonly config: AppConfig,
     dependencies: JupiterLendAdapterDependencies = {},
   ) {
-    if (config.cluster !== "mainnet-beta")
+    if (config.cluster !== "mainnet")
       throw new JupiterLendError(
-        "Jupiter Lend v0.2 is available only on mainnet-beta.",
+        "Jupiter Lend v0.2 is available only on mainnet.",
       );
     this.connection =
       dependencies.connection ??
@@ -270,7 +270,7 @@ export class JupiterLendAdapter {
     const genesisHash = await this.connection.getGenesisHash();
     if (genesisHash !== MAINNET_GENESIS_HASH)
       throw new JupiterLendError(
-        "RPC endpoint is not Solana mainnet-beta; refusing Jupiter Lend access.",
+        "RPC endpoint is not Solana mainnet; refusing Jupiter Lend access.",
       );
     const mint = new PublicKey(JUPITER_LEND_USDC_MINT);
     const response = await this.connection.getParsedAccountInfo(mint);

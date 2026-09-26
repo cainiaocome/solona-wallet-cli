@@ -111,14 +111,17 @@ They read only the public address and keystore metadata.
 
 Solana has separate networks. This project supports:
 
-- `mainnet-beta`: real SOL, real tokens, and real transactions.
+- `mainnet`: real SOL, real tokens, and real transactions.
 - `devnet`: a public testing network whose tokens are not real money.
 
-The default is `mainnet-beta`. Check the prompt or run:
+The default is `mainnet`. Check the prompt or run:
 
 ```text
 show config
 ```
+
+The current public RPC is `https://api.mainnet.solana.com`. Configuration must
+use the current cluster name, `mainnet`; see the [mainnet setup guide](mainnet-migration.md).
 
 For learning, use devnet explicitly:
 

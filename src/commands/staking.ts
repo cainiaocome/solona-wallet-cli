@@ -268,7 +268,7 @@ export async function stakeCreate(
       hasFlag(command, "yes") ||
       context.session.yes ||
       (await confirm(
-        context.config.cluster === "mainnet-beta"
+        context.config.cluster === "mainnet"
           ? "You are about to submit a MAINNET transaction. Proceed?"
           : "Submit this staking transaction?",
       ))
@@ -557,7 +557,7 @@ async function runStakeInstruction(
       hasFlag(command, "yes") ||
       context.session.yes ||
       (await confirm(
-        context.config.cluster === "mainnet-beta"
+        context.config.cluster === "mainnet"
           ? "You are about to submit a MAINNET transaction. Proceed?"
           : "Submit this transaction?",
       ))

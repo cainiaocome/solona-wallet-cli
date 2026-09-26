@@ -12,6 +12,7 @@ The application is implemented as a strict ESM TypeScript CLI. The current v0.2 
 - AES-256-GCM with random salt and nonce, authenticated public metadata, atomic `0600` writes
 - shared command parser for REPL and `-c` mode, quotes, `--flag=value`, flags, aliases, help, history, and contextual completion
 - cluster/RPC/commitment configuration precedence and session changes
+- current Solana `mainnet` naming and default RPC
 - SOL and SPL/Token-2022 read commands
 - SOL and basic token transfer builders with exact amounts, simulation, confirmation, broadcast, and confirmation polling
 - native Stake Program create/delegate, list, deactivate, and withdraw command paths
@@ -87,6 +88,8 @@ npm run format:check
 
 The current offline suite covers exact decimal parsing, large bigint amounts, parser quoting and flags, command completion, history filtering, keystore round trips, wrong passwords, authenticated metadata tampering, atomic replacement refusal, file mode, absence of plaintext key fields, Stake Program sysvar account order, cluster/RPC session safety, exact USDC conversion, mainnet-only lending gating, and Jupiter instruction conversion. Docker E2E is kept separate because it requires Docker and a PTY; it must be run against `SOL_WALLET_E2E_IMAGE`, never against `tsx` or the source tree. The workflow fails before publication if the image reference, Docker, pexpect, or any E2E test is missing, and uploads a method log plus image metadata on E2E failure.
 
+The Solana `mainnet` naming update passed Prettier, Black, all 24 offline unit tests (including strict cluster-name validation), TypeScript lint/build, and `git diff --check`. Docker E2E was not run locally; GitHub Actions is the configured Docker test environment.
+
 Before committing, TypeScript/JSON/Markdown/YAML changes are formatted with Prettier `3.6.2`, and the Python E2E harness is formatted with Black `25.1.0`; the repository rule for this is recorded in `AGENTS.md`.
 
 In this workspace the image build completed, but the available Docker runtime exposed bind-mounted host directories as root-owned inside the container. That caused the secure non-root runtime to receive `EPERM` while enforcing the `0700` config directory. The PTY/mock-RPC tests are therefore intentionally left for the GitHub Actions runner, where the workflow builds and tests the exact image in its supported Docker environment.
@@ -109,7 +112,7 @@ The post-review v0.2 GitHub Actions run `35482612396` passed dependency installa
 - Read-only commands still need a network when they query chain state; `address` and `wallet info` do not.
 - A submitted transaction whose confirmation times out is not retried automatically; the signature is shown so it can be inspected.
 - The current token sender supports basic checked transfers and refuses Token-2022 extension mints.
-- Jupiter Lend requires mainnet-beta and canonical USDC; no live mainnet lending write has been executed by automated validation.
+- Jupiter Lend requires mainnet and canonical USDC; no live mainnet lending write has been executed by automated validation.
 - `npm audit --omit=dev` currently reports upstream transitive advisories through the legacy Jupiter SDK dependency graph; see [jupiter-lend.md](jupiter-lend.md) before any release dependency refresh.
 - The runtime image strips the unused Jupiter read-SDK build/test toolchain after production pruning; the source install still retains those upstream dependency declarations for reproducible SDK use.
 - Stake account JSON parsing follows the current generated/RPC shapes and deliberately reports `unknown` for locally registered accounts that cannot be discovered or decoded.

@@ -99,9 +99,12 @@ semantics and need explicit handling.
 The CLI talks to a Solana node through JSON-RPC. The default public URLs are:
 
 ```text
-mainnet-beta: https://api.mainnet-beta.solana.com
+mainnet: https://api.mainnet.solana.com
 devnet:      https://api.devnet.solana.com
 ```
+
+Solana's production cluster is named `mainnet`, and that is the only production
+cluster name accepted by this CLI.
 
 Public RPC endpoints are shared services. They can rate-limit, fail, lag, or
 return errors. They also see your requests and queried addresses. You can

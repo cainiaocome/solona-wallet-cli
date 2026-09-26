@@ -152,7 +152,7 @@ jupiter-lend status
 ```
 
 The command reports supplied assets, protocol liquidity, and the smaller
-currently withdrawable amount. It requires `mainnet-beta`; it is not a devnet
+currently withdrawable amount. It requires `mainnet`; it is not a devnet
 demo.
 
 Deposit after independently checking the amount and protocol:

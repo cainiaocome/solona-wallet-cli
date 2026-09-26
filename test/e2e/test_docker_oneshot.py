@@ -127,4 +127,4 @@ class DockerOneShotTests(unittest.TestCase):
     def test_lend_mainnet_guard_is_present_in_the_runtime_image(self):
         result = self.run_wallet("jupiter-lend status")
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-        self.assertIn("mainnet-beta", result.stderr)
+        self.assertIn("mainnet", result.stderr)

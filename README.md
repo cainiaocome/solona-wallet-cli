@@ -101,9 +101,9 @@ sol-wallet -c "stake list" --cluster devnet --json
 sol-wallet -c "jupiter-lend status" --json
 ```
 
-The default cluster is `mainnet-beta`; use `--cluster devnet`, `SOL_WALLET_CLUSTER=devnet`, or `set cluster devnet` for a session change. The current cluster is shown in prompts and write summaries, and network commands verify the RPC endpoint's genesis hash before using chain data or signing.
+The default cluster is `mainnet`; use `--cluster devnet`, `SOL_WALLET_CLUSTER=devnet`, or `set cluster devnet` for a session change. The default production RPC is `https://api.mainnet.solana.com`. The current cluster is shown in prompts and write summaries, and network commands verify the RPC endpoint's genesis hash before using chain data or signing. See [the mainnet setup guide](docs/mainnet-migration.md) if you have existing configuration.
 
-The provider-specific `jupiter-lend` command name keeps this Jupiter integration distinct and leaves the generic `lend` name available if additional protocols are added later. Jupiter Lend commands require `mainnet-beta` and verify the canonical Solana USDC mint (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) is owned by the legacy SPL Token Program with six decimals. The command boundary uses Jupiter's official Earn SDK adapter; its legacy web3 types are isolated under `src/integrations/jupiter-lend/`.
+The provider-specific `jupiter-lend` command name keeps this Jupiter integration distinct and leaves the generic `lend` name available if additional protocols are added later. Jupiter Lend commands require `mainnet` and verify the canonical Solana USDC mint (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) is owned by the legacy SPL Token Program with six decimals. The command boundary uses Jupiter's official Earn SDK adapter; its legacy web3 types are isolated under `src/integrations/jupiter-lend/`.
 
 ## Configuration and files
 

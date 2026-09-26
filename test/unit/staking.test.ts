@@ -19,6 +19,7 @@ import {
   STAKE_CONFIG_ADDRESS,
 } from "../../src/commands/staking.js";
 import { setSessionCluster } from "../../src/config/config.js";
+import { clusterSchema, defaultRpcUrl } from "../../src/config/schema.js";
 
 const wallet = address("11111111111111111111111111111112");
 const vote = address("11111111111111111111111111111113");
@@ -104,8 +105,8 @@ describe("native stake instruction safety", () => {
 describe("session cluster safety", () => {
   it("switches the default RPC together with the cluster", () => {
     const config = {
-      cluster: "mainnet-beta" as const,
-      rpcUrl: "https://api.mainnet-beta.solana.com",
+      cluster: "mainnet" as const,
+      rpcUrl: "https://api.mainnet.solana.com",
       commitment: "confirmed" as const,
       configDir: "/tmp",
     };
@@ -116,7 +117,7 @@ describe("session cluster safety", () => {
 
   it("refuses to relabel a session with an explicit RPC URL", () => {
     const config = {
-      cluster: "mainnet-beta" as const,
+      cluster: "mainnet" as const,
       rpcUrl: "https://rpc.example.invalid",
       commitment: "confirmed" as const,
       configDir: "/tmp",
@@ -124,5 +125,11 @@ describe("session cluster safety", () => {
     expect(() => setSessionCluster(config, "devnet")).toThrow(
       /explicit RPC URL/,
     );
+  });
+
+  it("uses Solana's current mainnet name and endpoint", () => {
+    expect(defaultRpcUrl("mainnet")).toBe("https://api.mainnet.solana.com");
+    expect(clusterSchema.safeParse("mainnet").success).toBe(true);
+    expect(clusterSchema.safeParse("mainnet-beta").success).toBe(false);
   });
 });

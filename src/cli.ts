@@ -44,7 +44,7 @@ function parseArgs(argv: string[]): StartupOptions {
     else if (arg === "--cluster") {
       const value = clusterSchema.safeParse(next());
       if (!value.success)
-        throw new ConfigError("--cluster must be mainnet-beta or devnet.");
+        throw new ConfigError("--cluster must be mainnet or devnet.");
       options.cluster = value.data;
     } else if (arg === "--rpc-url") options.rpcUrl = next();
     else if (arg === "--commitment") {

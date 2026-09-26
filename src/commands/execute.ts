@@ -279,11 +279,11 @@ async function executeSet(
   rejectExtraArgs(
     command,
     2,
-    "set cluster <mainnet-beta|devnet> | set rpc-url <url> | set commitment <level>",
+    "set cluster <mainnet|devnet> | set rpc-url <url> | set commitment <level>",
   );
   const field = command.args[0];
   const value = command.args[1]!;
-  if (field === "cluster" && (value === "mainnet-beta" || value === "devnet")) {
+  if (field === "cluster" && (value === "mainnet" || value === "devnet")) {
     setSessionCluster(context.config, value);
     context.output.print(
       { ok: true, cluster: value, rpcUrl: context.config.rpcUrl },

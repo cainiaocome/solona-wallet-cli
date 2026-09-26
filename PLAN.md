@@ -28,6 +28,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - [complete] Add v0.2 unit tests and operational/dependency-risk documentation.
 - [complete] Run v0.2 full validation and GitHub Docker workflow.
 - [complete] Expand beginner documentation and annotate the Web3/security boundaries in source code.
+- [complete] Update the production cluster label/default RPC to Solana's current `mainnet` naming and validate code/tests/docs.
 
 ## Decisions / constraints
 
@@ -62,3 +63,4 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - The host wrapper now pulls its selected image tag before each invocation and stops on pull failure rather than silently using stale cached content.
 - Bare command groups display their usage and available subcommands instead of producing a self-referential unknown-command suggestion.
 - The user-facing Jupiter integration command is named `jupiter-lend`, reserving `lend` for possible future multi-protocol routing.
+- Solana production cluster naming now uses only `mainnet` and `https://api.mainnet.solana.com`. Validation: formatting, 24 unit tests, TypeScript lint/build, Black, and diff checks passed. Docker E2E remains assigned to GitHub Actions.

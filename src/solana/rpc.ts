@@ -19,7 +19,7 @@ export function createRpc(config: AppConfig): SolanaRpc {
 }
 
 const CLUSTER_GENESIS_HASH: Record<Cluster, string> = {
-  "mainnet-beta": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  mainnet: "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
   devnet: "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC",
 };
 

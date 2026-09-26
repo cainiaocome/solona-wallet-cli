@@ -4,10 +4,10 @@ import path from "node:path";
 import dotenv from "dotenv";
 import { ConfigError } from "../errors/errors.js";
 import {
-  clusterSchema,
   commitmentSchema,
   defaultRpcUrl,
   fileConfigSchema,
+  clusterSchema,
   type Cluster,
   type Commitment,
 } from "./schema.js";
@@ -111,17 +111,14 @@ export async function loadConfig(
     ? commitmentSchema.safeParse(process.env.SOL_WALLET_COMMITMENT)
     : undefined;
   if (envCluster && !envCluster.success)
-    throw new ConfigError("SOL_WALLET_CLUSTER must be mainnet-beta or devnet.");
+    throw new ConfigError("SOL_WALLET_CLUSTER must be mainnet or devnet.");
   if (envCommitment && !envCommitment.success)
     throw new ConfigError(
       "SOL_WALLET_COMMITMENT must be processed, confirmed, or finalized.",
     );
 
   const cluster =
-    overrides.cluster ??
-    envCluster?.data ??
-    fileConfig.cluster ??
-    "mainnet-beta";
+    overrides.cluster ?? envCluster?.data ?? fileConfig.cluster ?? "mainnet";
   const rpcUrl = checkedUrl(
     overrides.rpcUrl ??
       process.env.SOL_WALLET_RPC_URL ??
