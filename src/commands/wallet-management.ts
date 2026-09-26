@@ -48,8 +48,12 @@ export async function walletList(context: CommandContext): Promise<void> {
             (wallet) =>
               `${wallet.current ? "*" : " "} ${wallet.default ? "*" : " "} ${wallet.alias.padEnd(32)} ${wallet.address} ${wallet.health}`,
           )
-          .join("\n")}`
-      : "No wallets registered. Run `wallet import <alias>`.",
+          .join(
+            "\n",
+          )}${orphanIds.length ? `\n\nUnregistered UUID-named wallet paths (review before recovery):\n${orphanIds.join("\n")}` : ""}`
+      : orphanIds.length
+        ? `No wallets registered. Run \`wallet recover <uuid> <alias>\` for an unregistered key.\nUnregistered UUID-named wallet paths (review before recovery):\n${orphanIds.join("\n")}`
+        : "No wallets registered. Run `wallet import <alias>`.",
   );
 }
 

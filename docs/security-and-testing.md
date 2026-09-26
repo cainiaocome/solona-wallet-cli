@@ -85,8 +85,11 @@ git diff --check
 
 `npm test` is offline. The unit suite covers exact decimal conversion, parser
 behavior, history filtering, keystore encryption and tamper detection, stake
-instruction layout, lending gates, signer binding, and other deterministic
-boundaries.
+instruction layout and wallet/network registry isolation, signer binding, JSON
+line framing and errors, wallet recovery and writer contention, and other
+deterministic boundaries. Jupiter command tests use deterministic adapter
+instructions and verify that the selected wallet signs deposit and withdrawal
+transactions.
 
 The source test command does not prove that a Docker image works. The image
 has a separate build and E2E path.
@@ -108,7 +111,9 @@ npm ci
 The E2E harness checks the behavior a source test cannot see: non-root file
 permissions, interactive prompts, wallet import, hidden input, completion,
 JSON output, the runtime image's production dependencies, and the mock RPC
-transaction path. Publication happens only after all gates pass. Pull requests
+transaction path. It decodes the submitted SOL, token, and stake transactions,
+checks wallet B is the fee payer, and verifies each Ed25519 signature against
+B's public key. Publication happens only after all gates pass. Pull requests
 run the gates but do not publish; pushes to the main branch and version tags
 publish according to `.github/workflows/docker.yml`.
 

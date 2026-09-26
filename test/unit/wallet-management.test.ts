@@ -1,11 +1,13 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createCommandContext } from "../../src/commands/context.js";
 import { Output } from "../../src/output/output.js";
 import {
   walletDefault,
+  walletList,
   walletRename,
   walletUse,
 } from "../../src/commands/wallet-management.js";
@@ -18,6 +20,43 @@ import {
 } from "../../src/wallet/keystore.js";
 
 describe("wallet management commands", () => {
+  it("shows orphan UUID files in human wallet-list output", async () => {
+    const configDir = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-list-orphan-"),
+    );
+    const output: string[] = [];
+    try {
+      const key = await createFixture(configDir, 14);
+      await createRegistryEntry(configDir, "daily", key.address, key.path);
+      const orphanId = randomUUID();
+      await symlink(
+        key.path,
+        path.join(configDir, "wallets", `${orphanId}.json`),
+      );
+      const context = createCommandContext(
+        {
+          configDir,
+          cluster: "mainnet",
+          rpcUrl: "https://api.mainnet.solana.com",
+          commitment: "confirmed",
+        },
+        { json: false, verbose: false },
+      );
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        output.push(String(chunk));
+        return true;
+      });
+
+      await walletList(context);
+
+      expect(output.join("")).toContain(orphanId);
+      expect(output.join("")).toContain("daily");
+    } finally {
+      vi.restoreAllMocks();
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps current selection separate from saved default and preserves UUID on rename", async () => {
     const configDir = await mkdtemp(
       path.join(os.tmpdir(), "sol-wallet-manage-"),

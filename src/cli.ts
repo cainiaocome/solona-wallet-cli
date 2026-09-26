@@ -18,6 +18,7 @@ import { executeLine } from "./commands/execute.js";
 import { runRepl } from "./shell/repl.js";
 import { stringifyJson } from "./output/json.js";
 import { selectWallet } from "./wallet/store.js";
+import { hasFlag, parseCommand } from "./shell/parser.js";
 
 interface StartupOptions extends ConfigOverrides {
   command?: string;
@@ -126,7 +127,17 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
 }
 
 function parseJsonFlag(argv: string[]): boolean {
-  return argv.includes("--json");
+  if (argv.includes("--json")) return true;
+  let commandHasJson = false;
+  for (let index = 0; index < argv.length - 1; index += 1) {
+    if (argv[index] !== "-c" && argv[index] !== "--command") continue;
+    try {
+      commandHasJson = hasFlag(parseCommand(argv[index + 1]!), "json");
+    } catch {
+      commandHasJson = false;
+    }
+  }
+  return commandHasJson;
 }
 
 if (

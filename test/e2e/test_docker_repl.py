@@ -1,10 +1,11 @@
 import os
+import subprocess
 from pathlib import Path
 import shutil
 import tempfile
 import unittest
 
-from mock_rpc import start_server
+from mock_rpc import Handler, start_server
 from keypair import write_keypair
 
 IMAGE = os.environ.get("SOL_WALLET_E2E_IMAGE")
@@ -73,7 +74,8 @@ class DockerReplTests(unittest.TestCase):
         directory = Path(tempfile.mkdtemp(prefix="sol-wallet-import-"))
         fixture = Path(__file__).parents[1] / "fixtures" / "disposable-keypair.json"
         shutil.copyfile(fixture, directory / "keypair.json")
-        write_keypair(directory / "keypair-secondary.json")
+        secondary_address = write_keypair(directory / "keypair-secondary.json")
+        Handler.state.token_owner = secondary_address
         child = self.spawn(pexpect, directory, port)
         passphrase = "correct horse battery staple"
         try:
@@ -117,11 +119,29 @@ class DockerReplTests(unittest.TestCase):
             child.expect("Current wallet: vault")
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
+            Handler.state.transactions.clear()
             child.sendline("send 11111111111111111111111111111112 1 --yes")
             child.expect("Wallet: vault")
             child.expect("Passphrase for vault")
             child.sendline("secondary test passphrase")
             child.expect("Transaction confirmed")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
+
+            child.sendline(
+                "token send 11111111111111111111111111111114 "
+                "11111111111111111111111111111118 1 --yes"
+            )
+            child.expect("Passphrase for vault")
+            child.sendline("secondary test passphrase")
+            child.expect("Transaction confirmed")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
+
+            child.sendline(
+                "stake create 1 --validator " "11111111111111111111111111111116 --yes"
+            )
+            child.expect("Passphrase for vault")
+            child.sendline("secondary test passphrase")
+            child.expect("Stake created and delegated")
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
             child.send("stake ")
@@ -132,11 +152,14 @@ class DockerReplTests(unittest.TestCase):
             child.expect(pexpect.EOF)
             child.close()
             self.assertEqual(child.exitstatus, 0)
+            self.assertEqual(len(Handler.state.transactions), 3)
+            for encoded_transaction in Handler.state.transactions:
+                assert_transaction_signed_by(encoded_transaction, secondary_address)
         finally:
             if child.isalive():
                 child.close(force=True)
-            server.shutdown()
-            shutil.rmtree(directory, ignore_errors=True)
+        server.shutdown()
+        shutil.rmtree(directory, ignore_errors=True)
 
     @staticmethod
     def spawn(pexpect, directory, port):
@@ -163,3 +186,44 @@ class DockerReplTests(unittest.TestCase):
             encoding="utf-8",
             timeout=20,
         )
+
+
+def assert_transaction_signed_by(encoded_transaction, expected_address):
+    """Verify wallet B is the fee payer and signed the submitted transaction."""
+    verifier = r"""
+const crypto = require('node:crypto');
+const { VersionedTransaction } = require('@solana/web3.js');
+const transaction = VersionedTransaction.deserialize(
+  Buffer.from(process.argv[2], 'base64'),
+);
+const feePayer = transaction.message.staticAccountKeys[0];
+if (!feePayer || feePayer.toBase58() !== process.argv[1]) process.exit(2);
+const prefix = Buffer.from('302a300506032b6570032100', 'hex');
+const key = crypto.createPublicKey({
+  key: Buffer.concat([prefix, feePayer.toBytes()]),
+  format: 'der',
+  type: 'spki',
+});
+const valid = crypto.verify(
+  null,
+  transaction.message.serialize(),
+  key,
+  transaction.signatures[0],
+);
+if (!valid) process.exit(1);
+"""
+    result = subprocess.run(
+        [
+            "node",
+            "--input-type=commonjs",
+            "-e",
+            verifier,
+            expected_address,
+            encoded_transaction,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode:
+        raise AssertionError("Submitted transaction was not signed by wallet B")

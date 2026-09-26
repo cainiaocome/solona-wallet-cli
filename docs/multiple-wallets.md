@@ -44,6 +44,10 @@ address. `wallet info` reads public metadata without asking for a passphrase.
 commitment. Status is a local configuration summary; it does not check RPC
 health or fetch a balance.
 
+If UUID-named key files are present but unregistered, `wallet list` shows their
+IDs separately for review and recovery. An invalid unregistered path remains
+visible there without blocking healthy registered wallets.
+
 At interactive startup and in each prompt the CLI shows the alias and shortened
 address. Before a transaction, it shows the selected alias, full source address,
 and network. Read the full address carefully before approving a mainnet action.
@@ -97,7 +101,9 @@ change. You can rename the selected wallet without re-importing it.
 ## Where wallet data lives
 
 The default directory is `~/.config/sol-wallet`; Docker users should keep the
-mounted configuration directory backed up. Its relevant files look like:
+mounted configuration directory backed up. An explicitly configured directory
+may be a symlink; managed `wallets/` paths and wallet files beneath it still
+must be private, regular files and directories. Its relevant files look like:
 
 ```text
 config.json                    network and RPC preferences
@@ -211,7 +217,8 @@ address string should read `wallet.address`. Existing top-level fields such as
 For `status`, `wallet` is the current identity or `null`, and `defaultWallet` is
 the saved identity or `null`. RPC errors and command errors go to stderr; the
 transaction preflight is also sent to stderr in JSON mode so stdout remains
-machine-readable.
+machine-readable. Each JSON result and error is serialized on one line, so
+piped commands can be consumed as line-delimited JSON.
 
 Wallet history remains shared between aliases and is not an audit log. It
 filters secret-like command lines; never paste a key or passphrase into a

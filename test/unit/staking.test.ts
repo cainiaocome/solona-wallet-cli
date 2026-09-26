@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { address } from "@solana/kit";
 import {
   getDeactivateInstruction,
@@ -17,13 +20,43 @@ import {
   STAKE_STAKER_AUTHORITY_OFFSET,
   STAKE_WITHDRAW_AUTHORITY_OFFSET,
   STAKE_CONFIG_ADDRESS,
+  addStakeRegistryEntry,
+  readStakeRegistry,
 } from "../../src/commands/staking.js";
-import { setSessionCluster } from "../../src/config/config.js";
+import { createCommandContext } from "../../src/commands/context.js";
+import {
+  scopedStakeRegistryPath,
+  setSessionCluster,
+} from "../../src/config/config.js";
 import { clusterSchema, defaultRpcUrl } from "../../src/config/schema.js";
 
 const wallet = address("11111111111111111111111111111112");
 const vote = address("11111111111111111111111111111113");
 const signer = { address: wallet, signTransactions: async () => [] } as any;
+
+function stakeContext(
+  configDir: string,
+  id: string,
+  alias: string,
+  walletAddress: ReturnType<typeof address>,
+  cluster: "mainnet" | "devnet",
+) {
+  const context = createCommandContext(
+    {
+      configDir,
+      cluster,
+      rpcUrl: `https://api.${cluster}.solana.com`,
+      commitment: "confirmed",
+    },
+    { json: true, verbose: false },
+    { currentWalletId: id },
+  );
+  context.commandWallet = {
+    identity: { id, alias, address: walletAddress },
+    keystorePath: "unused-in-this-storage-test",
+  };
+  return context;
+}
 
 describe("native stake instruction safety", () => {
   it("keeps the documented StakeStateV2 filter offsets", () => {
@@ -103,6 +136,88 @@ describe("native stake instruction safety", () => {
 });
 
 describe("session cluster safety", () => {
+  it("persists stake hints separately for each wallet and network", async () => {
+    const configDir = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-stake-scope-"),
+    );
+    const dailyId = "d8ed414d-2175-4ab6-a0c9-4388514f5952";
+    const savingsId = "a8ed414d-2175-4ab6-a0c9-4388514f5952";
+    const dailyAddress = address("11111111111111111111111111111112");
+    const savingsAddress = address("11111111111111111111111111111113");
+    const dailyMainnet = stakeContext(
+      configDir,
+      dailyId,
+      "daily",
+      dailyAddress,
+      "mainnet",
+    );
+    const dailyDevnet = stakeContext(
+      configDir,
+      dailyId,
+      "daily",
+      dailyAddress,
+      "devnet",
+    );
+    const savingsMainnet = stakeContext(
+      configDir,
+      savingsId,
+      "savings",
+      savingsAddress,
+      "mainnet",
+    );
+    try {
+      await addStakeRegistryEntry(dailyMainnet, {
+        address: "11111111111111111111111111111114",
+        validatorVoteAccount: "11111111111111111111111111111115",
+        createdSignature: "daily-mainnet",
+        createdAt: "2026-09-26T00:00:00.000Z",
+      });
+      await addStakeRegistryEntry(dailyDevnet, {
+        address: "11111111111111111111111111111116",
+        validatorVoteAccount: "11111111111111111111111111111117",
+        createdSignature: "daily-devnet",
+        createdAt: "2026-09-26T00:00:00.000Z",
+      });
+      await addStakeRegistryEntry(savingsMainnet, {
+        address: "11111111111111111111111111111118",
+        validatorVoteAccount: "11111111111111111111111111111119",
+        createdSignature: "savings-mainnet",
+        createdAt: "2026-09-26T00:00:00.000Z",
+      });
+
+      expect(
+        (await readStakeRegistry(dailyMainnet)).accounts[0]?.createdSignature,
+      ).toBe("daily-mainnet");
+      expect(
+        (await readStakeRegistry(dailyDevnet)).accounts[0]?.createdSignature,
+      ).toBe("daily-devnet");
+      expect(
+        (await readStakeRegistry(savingsMainnet)).accounts[0]?.createdSignature,
+      ).toBe("savings-mainnet");
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps stake metadata paths separate for each wallet and network", () => {
+    const dailyMainnet = scopedStakeRegistryPath(
+      "/tmp/wallets",
+      "d8ed414d-2175-4ab6-a0c9-4388514f5952",
+      "mainnet",
+    );
+    const dailyDevnet = scopedStakeRegistryPath(
+      "/tmp/wallets",
+      "d8ed414d-2175-4ab6-a0c9-4388514f5952",
+      "devnet",
+    );
+    const savingsMainnet = scopedStakeRegistryPath(
+      "/tmp/wallets",
+      "a8ed414d-2175-4ab6-a0c9-4388514f5952",
+      "mainnet",
+    );
+    expect(new Set([dailyMainnet, dailyDevnet, savingsMainnet]).size).toBe(3);
+  });
+
   it("switches the default RPC together with the cluster", () => {
     const config = {
       cluster: "mainnet" as const,

@@ -136,6 +136,27 @@ workflow actions currently use a deprecated Node.js 20 runtime and that the
 `ubuntu-latest` runner image is scheduled to migrate to Ubuntu 26; neither
 notice affected this run.
 
+### Multi-wallet review fixes (2026-09-26)
+
+The follow-up review found that async command handlers could outlive the
+wallet/output context captured by the dispatcher. The dispatcher now awaits
+those handlers, including the `bal` alias, before restoring the context. JSON
+results and errors use one compact line per object, and command-level `--json`
+errors keep that format in one-shot, piped, and interactive execution. Human
+`wallet list` output now shows orphan UUID paths, while an unrelated invalid
+UUID path no longer hides healthy registered wallets. Registry writes accept a
+symlinked, user-selected config root while continuing to reject symlinked
+managed wallet directories and files. Stake registry temporary files are
+synced before atomic rename.
+
+Validation passed `npm test` (45 tests), TypeScript lint and build, Prettier and
+Black checks, and `git diff --check`. The rebuilt `linux/amd64` image passed all
+14 Docker E2E tests. The harness cryptographically verifies wallet B as fee
+payer and signer for SOL, token, and stake transactions; deterministic Jupiter
+deposit and withdrawal tests verify B's signature at the signing boundary. No
+live-chain write was performed. These review changes are local and have not
+been committed or published.
+
 ## Known operational limits
 
 - The mainnet and devnet public RPC defaults are configurable and are not guaranteed available.

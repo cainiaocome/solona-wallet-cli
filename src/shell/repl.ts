@@ -6,6 +6,8 @@ import { completeLine } from "./completion.js";
 import { appendHistory, readHistory } from "./history.js";
 import { shortenAddress } from "../output/human.js";
 import { readRegistry, resolveWallet } from "../wallet/store.js";
+import { hasFlag, parseCommand } from "./parser.js";
+import { Output } from "../output/output.js";
 
 /**
  * Interactive shell and piped-command runner.
@@ -74,7 +76,7 @@ export async function runRepl(context: CommandContext): Promise<number> {
       const result = await executeLine(context, line);
       if (result.exit) return 0;
     } catch (error) {
-      context.output.error(asAppError(error));
+      reportCommandError(context, line, error);
     }
     history = await readHistory(context.config.configDir);
   }
@@ -91,11 +93,27 @@ async function runPiped(context: CommandContext): Promise<number> {
       const result = await executeLine(context, String(line));
       if (result.exit) break;
     } catch (error) {
-      context.output.error(asAppError(error));
+      reportCommandError(context, String(line), error);
     }
   }
   input.close();
   return 0;
+}
+
+function reportCommandError(
+  context: CommandContext,
+  line: string,
+  error: unknown,
+): void {
+  let json = context.output.json;
+  try {
+    json ||= hasFlag(parseCommand(line), "json");
+  } catch {
+    // Preserve the parser error as the useful command diagnostic.
+  }
+  new Output({ json, verbose: context.output.verbose }).error(
+    asAppError(error),
+  );
 }
 
 function createInterface(

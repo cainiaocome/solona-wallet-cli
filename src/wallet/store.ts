@@ -13,6 +13,7 @@ import {
   readdir,
   rename,
   rm,
+  stat,
   link,
   unlink,
 } from "node:fs/promises";
@@ -220,6 +221,35 @@ async function findUnregisteredKeystores(configDir: string): Promise<string[]> {
   }
 }
 
+/** Listing reports UUID-named entries even if an individual one is invalid. */
+async function listUnregisteredKeystores(configDir: string): Promise<string[]> {
+  const directory = walletDirectoryPath(configDir);
+  try {
+    const metadata = await lstat(directory);
+    if (
+      !metadata.isDirectory() ||
+      metadata.isSymbolicLink() ||
+      (metadata.mode & 0o077) !== 0
+    )
+      storeError(
+        "WalletStoreInvalid",
+        "Wallet keystore directory must be a private 0700 directory.",
+      );
+    const entries = await readdir(directory, { withFileTypes: true });
+    return entries
+      .filter(
+        (entry) =>
+          entry.name.endsWith(".json") &&
+          uuidSchema.safeParse(entry.name.slice(0, -5)).success,
+      )
+      .map((entry) => entry.name.slice(0, -5))
+      .sort();
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+}
+
 export async function readRegistry(configDir: string): Promise<WalletRegistry> {
   const raw = await readJsonFile(walletRegistryPath(configDir));
   if (raw === null) {
@@ -336,7 +366,7 @@ export async function listOrphanIds(
   registry: WalletRegistry,
 ): Promise<string[]> {
   const registered = new Set(registry.wallets.map((wallet) => wallet.id));
-  return (await findUnregisteredKeystores(configDir)).filter(
+  return (await listUnregisteredKeystores(configDir)).filter(
     (id) => !registered.has(id),
   );
 }
@@ -401,7 +431,14 @@ export async function writeRegistryAtomic(
       "Refusing to write invalid wallet registry.",
     );
   const directory = configDir;
-  await ensureManagedDirectory(directory);
+  // A user may deliberately point the config directory through a symlink.
+  // Check the resolved target while continuing to reject symlinked managed
+  // subdirectories and metadata files.
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const rootMetadata = await stat(directory);
+  if (!rootMetadata.isDirectory())
+    storeError("WalletStoreInvalid", "Configuration root is not a directory.");
+  await chmod(directory, 0o700);
   const target = walletRegistryPath(configDir);
   try {
     const existing = await lstat(target);

@@ -15,7 +15,7 @@ process.stdout.write(JSON.stringify([...seed, ...address]));
 """
 
 
-def write_keypair(path: Path) -> None:
+def write_keypair(path: Path) -> str:
     """Write a new 0600 Solana JSON keypair file without logging its contents."""
     result = subprocess.run(
         ["node", "--input-type=commonjs", "-e", _NODE_KEYGEN],
@@ -35,3 +35,17 @@ def write_keypair(path: Path) -> None:
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as key_file:
         json.dump(keypair, key_file)
+    return base58_encode(bytes(keypair[32:]))
+
+
+def base58_encode(data: bytes) -> str:
+    """Encode public key bytes without adding a runtime test dependency."""
+    alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    number = int.from_bytes(data, "big")
+    encoded = ""
+    while number:
+        number, remainder = divmod(number, 58)
+        encoded = alphabet[remainder] + encoded
+    return alphabet[0] * (len(data) - len(data.lstrip(b"\0"))) + (
+        encoded or alphabet[0]
+    )

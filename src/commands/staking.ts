@@ -31,7 +31,6 @@ import {
   readFile,
   rename,
   rm,
-  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 import { scopedStakeRegistryPath } from "../config/config.js";
@@ -98,14 +97,14 @@ export function insertReadonlyAccounts(
   return { ...instruction, accounts };
 }
 
-interface StakeRegistryEntry {
+export interface StakeRegistryEntry {
   address: string;
   validatorVoteAccount: string;
   createdSignature: string;
   createdAt: string;
 }
 
-interface StakeRegistry {
+export interface StakeRegistry {
   version: 1;
   walletId: string;
   walletAddress: string;
@@ -298,7 +297,7 @@ export async function stakeCreate(
   );
   let registrySaved = true;
   try {
-    await addRegistryEntry(context, {
+    await addStakeRegistryEntry(context, {
       address: stakeAccount,
       validatorVoteAccount: validator.voteAccount,
       createdSignature: String(signature),
@@ -361,7 +360,7 @@ export async function stakeList(context: CommandContext): Promise<void> {
       rpc.getProgramAccounts(STAKE_PROGRAM_ADDRESS, withdrawConfig),
       "stake account lookup",
     ),
-    readRegistry(context),
+    readStakeRegistry(context),
   ]);
   const byAddress = new Map<string, unknown>();
   for (const account of [...stakerAccounts, ...withdrawerAccounts])
@@ -718,7 +717,9 @@ async function parseStakeAccount(
   };
 }
 
-async function readRegistry(context: CommandContext): Promise<StakeRegistry> {
+export async function readStakeRegistry(
+  context: CommandContext,
+): Promise<StakeRegistry> {
   const selected = await requireSelectedWallet(context);
   const target = scopedStakeRegistryPath(
     context.config.configDir,
@@ -779,7 +780,7 @@ async function readRegistry(context: CommandContext): Promise<StakeRegistry> {
   }
 }
 
-async function addRegistryEntry(
+export async function addStakeRegistryEntry(
   context: CommandContext,
   entry: StakeRegistryEntry,
 ): Promise<void> {
@@ -790,7 +791,7 @@ async function addRegistryEntry(
     context.config.cluster,
   );
   await withStoreLock(context.config.configDir, async () => {
-    const registry = await readRegistry(context);
+    const registry = await readStakeRegistry(context);
     registry.accounts = [
       ...registry.accounts.filter(
         (existing) => existing.address !== entry.address,
@@ -806,9 +807,17 @@ async function addRegistryEntry(
     );
     const temporaryPath = path.join(temporaryDirectory, "stake-accounts.json");
     try {
-      await writeFile(temporaryPath, `${JSON.stringify(registry, null, 2)}\n`, {
-        mode: 0o600,
-      });
+      const temporaryFile = await open(temporaryPath, "wx", 0o600);
+      try {
+        await temporaryFile.writeFile(
+          `${JSON.stringify(registry, null, 2)}\n`,
+          "utf8",
+        );
+        // Flush file contents before rename makes the new registry visible.
+        await temporaryFile.sync();
+      } finally {
+        await temporaryFile.close();
+      }
       await chmod(temporaryPath, 0o600);
       await rename(temporaryPath, target);
       const directoryHandle = await open(path.dirname(target), "r");

@@ -2,9 +2,10 @@
 
 ## Goal
 
-Implement multiple named wallets from `specs/multiple-wallets-design.md` and
-`specs/multiple-wallets-implementation.md`, while preserving existing command
-and signing safety.
+Review and fix identified multi-wallet implementation issues from
+`specs/multiple-wallets-design.md` and
+`specs/multiple-wallets-implementation.md`, preserving signing safety. RPC URL
+echo/history behavior is an explicit user-approved exception and remains.
 
 ## Current state
 
@@ -62,3 +63,31 @@ and signing safety.
   installation and the npm release-age policy, formatting, 31 unit tests,
   TypeScript build, `linux/amd64` image build, all 13 Docker E2E tests, GHCR
   authentication, and push of the exact tested image.
+
+## Review-fix state
+
+- [complete] Keep captured wallet/output context alive until asynchronous
+  handlers finish, including the `bal` alias.
+- [complete] Emit compact line-oriented JSON and preserve command-level JSON
+  errors in one-shot, piped, and interactive execution.
+- [complete] Accept an intentionally symlinked config root while rejecting
+  symlinked managed wallet paths; keep orphan paths visible in `wallet list`.
+- [complete] Sync stake registry contents before atomic rename.
+- [complete] Add recovery/concurrency tests, wallet/network stake isolation,
+  deterministic signed Jupiter deposit/withdraw coverage, and Docker signature
+  verification for wallet B's SOL, token, and stake transactions.
+- The explicitly accepted RPC URL echo and history behavior was left unchanged.
+
+## Review-fix validation
+
+- `npm run format`, `npm run format:check`, Black formatting/checks, and
+  `git diff --check`: pass.
+- `npm test`: 45 tests pass across 11 files.
+- `npm run lint` and `npm run build`: pass.
+- `docker build --platform linux/amd64 -t sol-wallet:review .`: pass; the image
+  embeds the 45-test suite and production TypeScript build.
+- `SOL_WALLET_E2E_IMAGE=sol-wallet:review python3 test/e2e/run_tests.py`: all
+  14 Docker E2E tests pass. Wallet B's submitted SOL, token, and stake
+  transactions are decoded; B is checked as fee payer and each signature is
+  verified with Node's Ed25519 implementation.
+- No live-chain writes were performed. Changes remain local and uncommitted.

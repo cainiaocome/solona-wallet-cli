@@ -119,7 +119,9 @@ export async function executeParsed(
       return { exit: false };
     }
     if (name === "bal")
-      return executeParsed(context, { ...command, name: "balance" });
+      return await executeParsed(context, { ...command, name: "balance" });
+    // Keep the command wallet and output mode alive until the async handler
+    // finishes; the finally block below restores both execution-scoped values.
     switch (name) {
       case "help":
         context.output.print(
@@ -157,7 +159,7 @@ export async function executeParsed(
         );
         return { exit: false };
       case "token":
-        return executeToken(context, command);
+        return await executeToken(context, command);
       case "validators":
         rejectExtraArgs(
           command,
@@ -174,7 +176,7 @@ export async function executeParsed(
         });
         return { exit: false };
       case "set":
-        return executeSet(context, command);
+        return await executeSet(context, command);
       case "show":
         rejectExtraArgs(command, 1, "show config");
         if (command.args[0] !== "config")
@@ -200,11 +202,11 @@ export async function executeParsed(
         rejectExtraArgs(command, 0, `${name}`);
         return { exit: true };
       case "tx":
-        return executeTx(context, command);
+        return await executeTx(context, command);
       case "stake":
-        return executeStake(context, command);
+        return await executeStake(context, command);
       case "jupiter-lend":
-        return executeJupiterLend(context, command);
+        return await executeJupiterLend(context, command);
       default:
         throw unknownCommand(command.name);
     }

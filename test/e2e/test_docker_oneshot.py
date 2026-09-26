@@ -20,6 +20,7 @@ IMAGE = os.environ.get("SOL_WALLET_E2E_IMAGE")
 class DockerOneShotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        Handler.state.token_owner = None
         cls.server = start_server()
         cls.port = cls.server.server_address[1]
         cls.directory = Path(tempfile.mkdtemp(prefix="sol-wallet-e2e-"))
@@ -163,6 +164,48 @@ class DockerOneShotTests(unittest.TestCase):
             json.loads(result.stderr[error_start:])["error"], "WalletNotFound"
         )
         self.assertNotIn("getGenesisHash", Handler.state.methods)
+
+    def test_command_level_json_errors_work_in_oneshot_and_piped_modes(self):
+        oneshot = self.run_wallet("wallet info missing --json")
+        self.assertEqual(oneshot.returncode, 2)
+        one_shot_json = [
+            line for line in oneshot.stderr.splitlines() if line.startswith("{")
+        ]
+        self.assertEqual(len(one_shot_json), 1, oneshot.stderr)
+        self.assertEqual(json.loads(one_shot_json[0])["error"], "WalletNotFound")
+
+        piped = subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-i",
+                "--network",
+                "host",
+                "--user",
+                self.uid,
+                "-e",
+                "SOL_WALLET_CONFIG_DIR=/home/solwallet/.config/sol-wallet",
+                "-e",
+                "SOL_WALLET_CLUSTER=devnet",
+                "-e",
+                f"SOL_WALLET_RPC_URL=http://127.0.0.1:{self.port}",
+                "-v",
+                f"{self.directory}:/home/solwallet/.config/sol-wallet",
+                IMAGE,
+            ],
+            input="wallet info missing --json\nexit\n",
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        self.assertEqual(piped.returncode, 0, piped.stdout + piped.stderr)
+        self.assertEqual(piped.stdout, "")
+        piped_json = [
+            line for line in piped.stderr.splitlines() if line.startswith("{")
+        ]
+        self.assertEqual(len(piped_json), 1, piped.stderr)
+        self.assertEqual(json.loads(piped_json[0])["error"], "WalletNotFound")
 
     def test_legacy_keystore_migrates_and_is_preserved(self):
         directory = Path(tempfile.mkdtemp(prefix="sol-wallet-migrate-"))
