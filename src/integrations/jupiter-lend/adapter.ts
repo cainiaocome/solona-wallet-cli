@@ -39,6 +39,7 @@ export const JUPITER_LEND_USDC_MINT =
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" as Address;
 export const JUPITER_LEND_USDC_DECIMALS = 6;
 export const LEGACY_SPL_TOKEN_ACCOUNT_SPACE = 165n;
+const MAINNET_GENESIS_HASH = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
 
 export interface WalletInstruction {
   programAddress: Address;
@@ -266,6 +267,11 @@ export class JupiterLendAdapter {
 
   private async verifyCanonicalUsdc(): Promise<void> {
     if (this.verifiedUsdc) return;
+    const genesisHash = await this.connection.getGenesisHash();
+    if (genesisHash !== MAINNET_GENESIS_HASH)
+      throw new JupiterLendError(
+        "RPC endpoint is not Solana mainnet-beta; refusing Jupiter Lend access.",
+      );
     const mint = new PublicKey(JUPITER_LEND_USDC_MINT);
     const response = await this.connection.getParsedAccountInfo(mint);
     const account = response.value;

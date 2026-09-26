@@ -12,10 +12,11 @@
 import { pathToFileURL } from "node:url";
 import { loadConfig, type ConfigOverrides } from "./config/config.js";
 import { clusterSchema, commitmentSchema } from "./config/schema.js";
-import { asAppError, ConfigError } from "./errors/errors.js";
+import { asAppError, ConfigError, redact } from "./errors/errors.js";
 import { createCommandContext } from "./commands/context.js";
 import { executeLine } from "./commands/execute.js";
 import { runRepl } from "./shell/repl.js";
+import { stringifyJson } from "./output/json.js";
 
 interface StartupOptions extends ConfigOverrides {
   command?: string;
@@ -80,7 +81,12 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     const appError = asAppError(error);
     if (parseJsonFlag(argv))
       process.stderr.write(
-        `${JSON.stringify({ ok: false, error: appError.code, message: appError.message })}\n`,
+        `${stringifyJson({
+          ok: false,
+          error: appError.code,
+          message: appError.message,
+          ...(appError.details ? { details: redact(appError.details) } : {}),
+        })}\n`,
       );
     else process.stderr.write(`Error: ${appError.message}\n`);
     return appError.exitCode;

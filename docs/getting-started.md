@@ -58,13 +58,13 @@ npm run build
 npm run dev
 ```
 
-The lockfile is authoritative. The project also requires npm's seven-day
-release-age policy through `.npmrc`; package versions newer than seven days are
-not selected. `npm ci` should be preferred for repeatable installs, and the
-`--legacy-peer-deps` flag is required by the pinned Jupiter SDK dependency
-graph. The original dependency-install issue and its exact cause are recorded
-in [implementation.md](implementation.md). See [supply-chain.md](supply-chain.md)
-before changing dependencies.
+The lockfile is authoritative. `.npmrc` applies npm's seven-day release-age
+window during dependency resolution and updates; `npm ci` reproduces the exact
+versions already pinned in the lockfile and does not itself prove those
+versions are older than seven days. The `--legacy-peer-deps` flag is required
+by the pinned Jupiter SDK dependency graph. The original dependency-install
+issue is recorded in [implementation.md](implementation.md). See
+[supply-chain.md](supply-chain.md) before changing dependencies.
 
 ## 4. Import a wallet safely
 

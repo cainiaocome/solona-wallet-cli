@@ -27,28 +27,29 @@ adapter knows those types, but it cannot unlock the keystore by itself.
 
 ## Source map
 
-| Directory/file                   | Responsibility                                       | Beginner question it answers                         |
-| -------------------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
-| `src/cli.ts`                     | Startup flags, config, top-level error handling      | How does the process start?                          |
-| `src/config/`                    | Cluster, RPC, commitment, and file configuration     | Which network and RPC are used?                      |
-| `src/shell/parser.ts`            | Tokenization, flags, positional arguments            | How does text become a command?                      |
-| `src/shell/repl.ts`              | Interactive and piped input                          | How does the prompt loop work?                       |
-| `src/commands/execute.ts`        | Dispatch and command-specific flag validation        | Which handler runs?                                  |
-| `src/commands/context.ts`        | Shared config, output, session, and client factories | What does a handler receive?                         |
-| `src/commands/read-only.ts`      | Public address and chain reads                       | Which commands avoid signing?                        |
-| `src/commands/send.ts`           | SOL transaction lifecycle                            | How is a normal transfer built and sent?             |
-| `src/commands/token-send.ts`     | Mint metadata, ATA, and token transfer               | How are fungible tokens sent?                        |
-| `src/commands/staking.ts`        | Native Stake Program operations                      | How are stake accounts managed?                      |
-| `src/commands/lending.ts`        | Jupiter command safety and common transaction path   | How does a protocol write reach the wallet pipeline? |
-| `src/solana/amounts.ts`          | Decimal strings and integer base units               | Why is money a `bigint`?                             |
-| `src/solana/rpc.ts`              | RPC client creation and error conversion             | How are node failures reported?                      |
-| `src/solana/tokens.ts`           | Parsed SPL and Token-2022 accounts                   | What does `token list` read?                         |
-| `src/wallet/keystore.ts`         | Key parsing, encryption, atomic persistence          | Where is key material handled?                       |
-| `src/wallet/signer.ts`           | Lazy keystore unlock and transaction signing         | When can the private key be used?                    |
-| `src/integrations/jupiter-lend/` | Legacy SDK isolation and instruction conversion      | Where is Jupiter-specific code?                      |
-| `src/output/`                    | Human output, JSON conversion, redaction             | How are results and errors printed?                  |
-| `test/unit/`                     | Offline deterministic tests                          | What can be tested without a network?                |
-| `test/e2e/`                      | Docker/PTTY/mock-RPC tests                           | Does the packaged image behave correctly?            |
+| Directory/file                         | Responsibility                                       | Beginner question it answers                         |
+| -------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
+| `src/cli.ts`                           | Startup flags, config, top-level error handling      | How does the process start?                          |
+| `src/config/`                          | Cluster, RPC, commitment, and file configuration     | Which network and RPC are used?                      |
+| `src/shell/parser.ts`                  | Tokenization, flags, positional arguments            | How does text become a command?                      |
+| `src/shell/repl.ts`                    | Interactive and piped input                          | How does the prompt loop work?                       |
+| `src/commands/execute.ts`              | Dispatch and command-specific flag validation        | Which handler runs?                                  |
+| `src/commands/context.ts`              | Shared config, output, session, and client factories | What does a handler receive?                         |
+| `src/commands/read-only.ts`            | Public address and chain reads                       | Which commands avoid signing?                        |
+| `src/commands/send.ts`                 | SOL transaction lifecycle                            | How is a normal transfer built and sent?             |
+| `src/commands/token-send.ts`           | Mint metadata, ATA, and token transfer               | How are fungible tokens sent?                        |
+| `src/commands/staking.ts`              | Native Stake Program operations                      | How are stake accounts managed?                      |
+| `src/commands/lending.ts`              | Jupiter command safety and common transaction path   | How does a protocol write reach the wallet pipeline? |
+| `src/solana/amounts.ts`                | Decimal strings and integer base units               | Why is money a `bigint`?                             |
+| `src/solana/rpc.ts`                    | RPC client creation and error conversion             | How are node failures reported?                      |
+| `src/solana/tokens.ts`                 | Parsed SPL and Token-2022 accounts                   | What does `token list` read?                         |
+| `src/wallet/keystore.ts`               | Key parsing, encryption, atomic persistence          | Where is key material handled?                       |
+| `src/wallet/signer.ts`                 | Lazy keystore unlock and transaction signing         | When can the private key be used?                    |
+| `src/integrations/jupiter-lend/`       | Legacy SDK isolation and instruction conversion      | Where is Jupiter-specific code?                      |
+| `src/integrations/stake-activation.ts` | RPC-derived stake activation state                   | How does the CLI know cooldown has finished?         |
+| `src/output/`                          | Human output, JSON conversion, redaction             | How are results and errors printed?                  |
+| `test/unit/`                           | Offline deterministic tests                          | What can be tested without a network?                |
+| `test/e2e/`                            | Docker/PTTY/mock-RPC tests                           | Does the packaged image behave correctly?            |
 
 ## A read-only command
 
@@ -120,6 +121,12 @@ The adapter also enforces the protocol scope: mainnet only, canonical USDC,
 legacy SPL Token Program, six decimals, and the minimum of user-supplied assets
 and protocol-reported liquidity. Do not move those checks into a generic
 command helper where another asset could bypass them.
+
+The `stake-activation` integration asks the configured Solana RPC for stake
+activation state. It does not infer that a stake is fully inactive merely
+because its deactivation epoch has passed. Solana currently marks this RPC
+method deprecated, so an endpoint error blocks the operation rather than
+falling back to an epoch guess.
 
 ## Configuration flow
 

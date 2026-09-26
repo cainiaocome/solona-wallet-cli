@@ -1,4 +1,4 @@
-import { chmod, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
+import { chmod, link, mkdir, open, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 import { Algorithm, hashRaw } from "@node-rs/argon2";
@@ -262,16 +262,6 @@ export async function writeKeystoreAtomic(
 ): Promise<void> {
   await mkdir(configDir, { recursive: true, mode: 0o700 });
   const target = keystoreFilePath(configDir);
-  try {
-    await readFile(target);
-    throw new KeystoreError(
-      "A keystore already exists. Refusing to replace it.",
-    );
-  } catch (error) {
-    if (error instanceof KeystoreError) throw error;
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-      throw new KeystoreError("Unable to inspect the existing keystore.");
-  }
   const temp = `${target}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
@@ -281,12 +271,18 @@ export async function writeKeystoreAtomic(
     await handle.close();
     handle = undefined;
     await chmod(temp, 0o600);
-    await rename(temp, target);
-    await chmod(target, 0o600);
+    // link() creates the final name atomically and fails with EEXIST. Unlike
+    // rename(), it can never replace a keystore created by a concurrent import.
+    await link(temp, target);
+    await unlink(temp).catch(() => undefined);
   } catch (error) {
     if (handle) await handle.close().catch(() => undefined);
     await unlink(temp).catch(() => undefined);
     if (error instanceof KeystoreError) throw error;
+    if ((error as NodeJS.ErrnoException).code === "EEXIST")
+      throw new KeystoreError(
+        "A keystore already exists. Refusing to replace it.",
+      );
     throw new KeystoreError("Unable to write keystore atomically.");
   }
 }

@@ -42,6 +42,8 @@ class Handler(BaseHTTPRequestHandler):
         params = request.get("params", [])
         if method == "getBalance":
             result = {"context": {"slot": 100}, "value": 10_000_000_000}
+        elif method == "getGenesisHash":
+            result = "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"
         elif method == "getTokenAccountsByOwner":
             result = {"context": {"slot": 100}, "value": []}
         elif method == "getVoteAccounts":

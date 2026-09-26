@@ -16,7 +16,12 @@ this document before putting any value on an address controlled by it.
   to `0600`, and atomically renamed. Existing keystores are not overwritten.
 - A signer is created only after validation, simulation, and confirmation.
 - Secrets are filtered from shell history and redacted from verbose error
-  details where practical.
+  details where practical. History also rejects likely raw base58, hex, and
+  JSON byte-array key encodings.
+- Before creating a transaction, writes compare the RPC endpoint's genesis
+  hash to the selected mainnet or devnet cluster.
+- Stake withdrawal checks both RPC-reported activation state and any configured
+  time/epoch lockup before building the instruction.
 - The runtime image runs as a non-root `solwallet` user.
 
 ## What the wallet cannot protect
@@ -31,6 +36,9 @@ this document before putting any value on an address controlled by it.
   transaction. Address syntax validation is not identity verification.
 - Simulation cannot guarantee future success because chain state can change.
 - A confirmation timeout does not prove that a transaction failed.
+- Stake activation lookup currently uses Solana's deprecated
+  `getStakeActivation` RPC. If a provider removes that method, stake listing
+  and withdrawal checks fail closed instead of guessing that funds are free.
 - Protocol risk, smart-contract bugs, validator behavior, token authorities,
   and market risk are outside the wallet's control.
 
@@ -105,17 +113,20 @@ image validation. Do not weaken the E2E test or claim it passed locally.
 ## Dependency notes
 
 The main wallet core uses `@solana/kit` and generated Solana program clients.
-The Jupiter v0.2 adapter is the only place that imports the legacy Jupiter SDK
-types and its direct compatibility dependencies. The runtime image removes
-unused upstream build/test tools after production pruning.
+The Jupiter v0.2 adapter contains the legacy Jupiter SDK types and direct
+compatibility dependencies. `src/integrations/stake-activation.ts` contains
+the narrow legacy web3 connection used to read stake activation status. The
+runtime image removes unused upstream build/test tools after production
+pruning.
 
-The repository's `.npmrc` sets `min-release-age=7`. npm interprets this as
-seven days: package versions must have been published more than seven days ago
-before they can be selected. The same policy is checked in GitHub Actions and
-inside the Docker build. This reduces exposure to a compromised brand-new
-release, while the lockfile provides exact version reproducibility. It is not
-a complete supply-chain defense: an older compromised package, a malicious
-maintainer, or a compromised registry can still be a risk.
+The repository's `.npmrc` sets `min-release-age=7` for dependency resolution
+and update operations. `npm ci` reproduces versions already in
+`package-lock.json`; checking npm's configured value in CI and Docker does not
+check each locked version's publish date. The lockfile provides repeatability,
+while the release-age setting helps avoid selecting brand-new versions when
+resolving updates. Neither control proves that a dependency is safe: older
+compromised releases, malicious maintainers, and registry compromise remain
+possible. See [supply-chain.md](supply-chain.md) for details.
 
 `npm audit --omit=dev` currently reports upstream transitive advisories in the
 pinned Jupiter SDK graph. This is documented rather than hidden. A future

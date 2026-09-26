@@ -18,7 +18,7 @@ import {
   safeJson,
 } from "../errors/errors.js";
 import { formatSol, parseSol } from "../solana/amounts.js";
-import { rpcRequest } from "../solana/rpc.js";
+import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import { parseAddress } from "../wallet/address.js";
 import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 import { requireWallet } from "./read-only.js";
@@ -43,6 +43,7 @@ export async function sendSol(
   const destination = parseAddress(destinationValue);
   const lamports = parseSol(amountValue);
   const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const balanceResponse = await rpcRequest(
     rpc.getBalance(source, { commitment: context.config.commitment }),
     "balance lookup",
@@ -93,8 +94,7 @@ export async function sendSol(
     dryRun,
   };
   const human = `Action:       Send SOL\nFrom:         ${source}\nTo:           ${destination}\nAmount:       ${formatSol(lamports)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`;
-  if (!context.output.json)
-    context.output.print({ ok: true, preflight: summary }, human);
+  context.output.preflight({ ok: true, preflight: summary }, human);
 
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
@@ -160,44 +160,53 @@ export async function confirmSignature(
   slot: bigint;
   confirmationStatus: "processed" | "confirmed" | "finalized";
 }> {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    if (lastValidBlockHeight !== undefined && attempt % 5 === 0) {
-      const blockHeight = await rpcRequest(
-        rpc.getBlockHeight({ commitment }),
-        "block height lookup",
+  try {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const response = await rpcRequest(
+        rpc.getSignatureStatuses([signature as never], {
+          searchTransactionHistory: true,
+        }),
+        "transaction confirmation lookup",
       );
-      if (BigInt(blockHeight as bigint) > lastValidBlockHeight)
+      const status = response.value[0];
+      if (status?.err)
         throw new ConfirmationError(
-          `Transaction blockhash expired before confirmation. Query signature ${signature} before retrying.`,
+          `Transaction failed after broadcast. Signature: ${signature}. Error: ${safeJson(status.err)}`,
           { signature },
         );
+      if (
+        status?.confirmationStatus &&
+        commitmentSatisfied(status.confirmationStatus, commitment)
+      )
+        return {
+          slot: status.slot,
+          confirmationStatus: status.confirmationStatus,
+        };
+      if (lastValidBlockHeight !== undefined && attempt % 5 === 0) {
+        const blockHeight = await rpcRequest(
+          rpc.getBlockHeight({ commitment }),
+          "block height lookup",
+        );
+        if (BigInt(blockHeight as bigint) > lastValidBlockHeight)
+          throw new ConfirmationError(
+            `Transaction blockhash expired before confirmation. Query signature ${signature} before retrying.`,
+            { signature },
+          );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    const response = await rpcRequest(
-      rpc.getSignatureStatuses([signature as never], {
-        searchTransactionHistory: true,
-      }),
-      "transaction confirmation lookup",
+    throw new ConfirmationError(
+      `Transaction confirmation timed out. Query signature ${signature} before retrying.`,
+      { signature },
     );
-    const status = response.value[0];
-    if (status?.err)
-      throw new ConfirmationError(
-        `Transaction failed after broadcast: ${safeJson(status.err)}`,
-        { signature },
-      );
-    if (
-      status?.confirmationStatus &&
-      commitmentSatisfied(status.confirmationStatus, commitment)
-    )
-      return {
-        slot: status.slot,
-        confirmationStatus: status.confirmationStatus,
-      };
-    await new Promise((resolve) => setTimeout(resolve, 500));
+  } catch (error) {
+    if (error instanceof ConfirmationError) throw error;
+    const message = error instanceof Error ? error.message : "RPC failure";
+    throw new ConfirmationError(
+      `Unable to confirm transaction. Query signature ${signature} before retrying. ${message}`,
+      { signature, cause: message },
+    );
   }
-  throw new ConfirmationError(
-    `Transaction confirmation timed out. Query signature ${signature} before retrying.`,
-    { signature },
-  );
 }
 
 function commitmentSatisfied(current: string, wanted: string): boolean {

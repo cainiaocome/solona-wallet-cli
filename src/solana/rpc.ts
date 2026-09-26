@@ -1,5 +1,6 @@
 import { createSolanaRpc } from "@solana/kit";
 import type { AppConfig } from "../config/config.js";
+import type { Cluster } from "../config/schema.js";
 import { RpcError } from "../errors/errors.js";
 
 /**
@@ -15,6 +16,27 @@ export function createRpc(config: AppConfig): SolanaRpc {
   return createSolanaRpc(
     config.rpcUrl as Parameters<typeof createSolanaRpc>[0],
   );
+}
+
+const CLUSTER_GENESIS_HASH: Record<Cluster, string> = {
+  "mainnet-beta": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
+  devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+};
+
+/** Refuse to sign through an RPC endpoint that belongs to another cluster. */
+export async function assertRpcCluster(
+  rpc: SolanaRpc,
+  expected: Cluster,
+): Promise<void> {
+  const genesisHash = await rpcRequest(
+    rpc.getGenesisHash(),
+    "cluster identity lookup",
+  );
+  if (genesisHash !== CLUSTER_GENESIS_HASH[expected])
+    throw new RpcError(
+      `RPC endpoint is not on ${expected}; refusing to prepare a transaction.`,
+      { expectedCluster: expected, genesisHash },
+    );
 }
 
 export async function rpcRequest<T>(

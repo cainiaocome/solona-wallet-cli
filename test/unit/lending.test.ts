@@ -50,6 +50,9 @@ describe("Jupiter Lend USDC boundary", () => {
   it("reads protocol availability and caps it at the user's supplied assets", async () => {
     const receiptMint = new PublicKey("11111111111111111111111111111113");
     const connection = {
+      getGenesisHash: vi
+        .fn()
+        .mockResolvedValue("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d"),
       getParsedAccountInfo: vi.fn().mockResolvedValue({
         value: {
           owner: TOKEN_PROGRAM_ID,

@@ -31,6 +31,12 @@ export class Output {
     else process.stdout.write(`${stringifyJson(value)}\n`);
   }
 
+  /** Show transaction details before consent while keeping JSON stdout parseable. */
+  preflight(value: unknown, human: string): void {
+    if (this.options.json) process.stderr.write(`${human}\n`);
+    else this.print(value, human);
+  }
+
   error(error: AppError): void {
     const payload = {
       ok: false,

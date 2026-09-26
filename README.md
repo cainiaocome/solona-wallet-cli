@@ -42,11 +42,11 @@ npm run format:check
 npm run dev
 ```
 
-The repository includes a `.npmrc` policy that prevents npm from selecting
-package versions published less than seven days ago. The lockfile still pins
-the exact dependency versions. This adds a short delay for newly released
-security fixes or compatible upgrades; see [docs/supply-chain.md](docs/supply-chain.md)
-for the update procedure and emergency override guidance.
+The repository includes a `.npmrc` policy for npm dependency resolution and
+updates. `npm ci` installs the exact versions in the lockfile, so the seven-day
+policy does not independently establish the age of those pinned releases. See
+[docs/supply-chain.md](docs/supply-chain.md) for the exact scope and update
+procedure.
 
 The code was tested with these exact dependency versions in the current lockfile: `@jup-ag/lend 0.0.108`, `@jup-ag/lend-read 0.0.14`, `@solana/kit 8.3.0`, `@solana/sysvars 8.3.0`, `@solana-program/system 0.14.1`, `@solana-program/stake 0.9.1`, `@solana-program/token 0.16.1`, `@solana-program/token-2022 0.17.0`, Node `>=24`, TypeScript `7.0.2`, Vitest `5.0.0`, Vite `8.3.0`, and Prettier `3.6.2`.
 
@@ -99,7 +99,7 @@ sol-wallet -c "stake list" --cluster devnet --json
 sol-wallet -c "lend status" --json
 ```
 
-The default cluster is `mainnet-beta`; use `--cluster devnet`, `SOL_WALLET_CLUSTER=devnet`, or `set cluster devnet` for a session change. The current cluster is shown in prompts and write summaries.
+The default cluster is `mainnet-beta`; use `--cluster devnet`, `SOL_WALLET_CLUSTER=devnet`, or `set cluster devnet` for a session change. The current cluster is shown in prompts and write summaries, and network commands verify the RPC endpoint's genesis hash before using chain data or signing.
 
 Jupiter Lend commands require `mainnet-beta` and verify the canonical Solana USDC mint (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) is owned by the legacy SPL Token Program with six decimals. The command boundary uses Jupiter's official Earn SDK adapter; its legacy web3 types are isolated under `src/integrations/jupiter-lend/`.
 

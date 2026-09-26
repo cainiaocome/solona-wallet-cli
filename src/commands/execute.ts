@@ -2,7 +2,7 @@ import { address } from "@solana/kit";
 import { setSessionCluster } from "../config/config.js";
 import { AppError } from "../errors/errors.js";
 import { formatSol } from "../solana/amounts.js";
-import { rpcRequest } from "../solana/rpc.js";
+import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import { completeLine } from "../shell/completion.js";
 import {
   flagValue,
@@ -302,8 +302,10 @@ async function executeTx(
   rejectExtraArgs(command, 2, "tx inspect <signature>");
   if (command.args[0] !== "inspect")
     throw unknownCommand(`tx ${command.args[0]}`);
+  const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const response = await rpcRequest(
-    context.getClient().rpc.getTransaction(command.args[1]! as never, {
+    rpc.getTransaction(command.args[1]! as never, {
       commitment: context.config.commitment,
       encoding: "json",
       maxSupportedTransactionVersion: 0,
@@ -402,6 +404,27 @@ function validateFlags(command: ParsedCommand): void {
   for (const flag of command.flags.keys())
     if (!allowed.has(flag))
       throw new AppError(`Unknown flag: --${flag}`, "ParseError", 2);
+
+  const booleanFlags = new Set([
+    "json",
+    "dry-run",
+    "yes",
+    "current-only",
+    "all",
+  ]);
+  const valueFlags = new Set([
+    "limit",
+    "max-commission",
+    "keypair-file",
+    "validator",
+    "amount",
+  ]);
+  for (const [flag, value] of command.flags) {
+    if (booleanFlags.has(flag) && value !== true)
+      throw new AppError(`--${flag} does not accept a value.`, "ParseError", 2);
+    if (valueFlags.has(flag) && value === true)
+      throw new AppError(`--${flag} requires a value.`, "ParseError", 2);
+  }
 }
 
 function levenshtein(left: string, right: string): number {

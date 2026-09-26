@@ -241,11 +241,10 @@ async function runLendInstruction(
     ataCreationCostLamports: ataCreationCost,
     dryRun: hasFlag(command, "dry-run") || context.session.dryRun,
   };
-  if (!context.output.json)
-    context.output.print(
-      { ok: true, preflight },
-      `${human}\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:       ${context.config.cluster}`,
-    );
+  context.output.preflight(
+    { ok: true, preflight },
+    `${human}\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:       ${context.config.cluster}`,
+  );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
       encoding: "base64",

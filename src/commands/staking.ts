@@ -51,6 +51,8 @@ import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 import { requireWallet } from "./read-only.js";
 import { confirmSignature } from "./send.js";
 import type { CommandContext } from "./context.js";
+import { assertRpcCluster } from "../solana/rpc.js";
+import { getStakeActivation } from "../integrations/stake-activation.js";
 
 /**
  * Native Stake Program commands.
@@ -115,8 +117,10 @@ export async function stakeCreate(
     throw new ValidatorError(
       "stake create requires --validator <vote-account>.",
     );
+  const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const validator = await findValidator(
-    context.getClient().rpc,
+    rpc,
     parseValidatorAddress(validatorValue),
     context.config.commitment,
   );
@@ -125,7 +129,6 @@ export async function stakeCreate(
       "The selected validator is delinquent; choose a current validator explicitly after inspecting it.",
     );
   const requested = parseSol(command.args[0]!);
-  const rpc = context.getClient().rpc;
   const minimumResponse = await rpcRequest(
     rpc.getStakeMinimumDelegation({ commitment: context.config.commitment }),
     "stake minimum delegation lookup",
@@ -236,11 +239,10 @@ export async function stakeCreate(
     cluster: context.config.cluster,
     dryRun: hasFlag(command, "dry-run") || context.session.dryRun,
   };
-  if (!context.output.json)
-    context.output.print(
-      { ok: true, preflight: summary },
-      `Action:              Native SOL stake\nWallet:              ${owner}\nValidator vote acct: ${validator.voteAccount}\nValidator node:      ${validator.nodeIdentity}\nValidator commission: ${validator.commission}%\nEffective stake:     ${formatSol(requested)} SOL\nRent reserve:        ${formatSol(rentReserve)} SOL\nTotal moved:         ${formatSol(requested + rentReserve)} SOL\nNetwork fee:         ~${formatSol(fee)} SOL\nStake account:       ${stakeAccount}\nCluster:             ${context.config.cluster}`,
-    );
+  context.output.preflight(
+    { ok: true, preflight: summary },
+    `Action:              Native SOL stake\nWallet:              ${owner}\nValidator vote acct: ${validator.voteAccount}\nValidator node:      ${validator.nodeIdentity}\nValidator commission: ${validator.commission}%\nEffective stake:     ${formatSol(requested)} SOL\nRent reserve:        ${formatSol(rentReserve)} SOL\nTotal moved:         ${formatSol(requested + rentReserve)} SOL\nNetwork fee:         ~${formatSol(fee)} SOL\nStake account:       ${stakeAccount}\nCluster:             ${context.config.cluster}`,
+  );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
       encoding: "base64",
@@ -288,12 +290,17 @@ export async function stakeCreate(
     context.config.commitment,
     latest.value.lastValidBlockHeight,
   );
-  await addRegistryEntry(context, {
-    address: stakeAccount,
-    validatorVoteAccount: validator.voteAccount,
-    createdSignature: String(signature),
-    createdAt: new Date().toISOString(),
-  });
+  let registrySaved = true;
+  try {
+    await addRegistryEntry(context, {
+      address: stakeAccount,
+      validatorVoteAccount: validator.voteAccount,
+      createdSignature: String(signature),
+      createdAt: new Date().toISOString(),
+    });
+  } catch {
+    registrySaved = false;
+  }
   context.output.print(
     {
       ok: true,
@@ -301,14 +308,16 @@ export async function stakeCreate(
       slot: status.slot,
       status: status.confirmationStatus,
       stakeAccount,
+      registrySaved,
     },
-    `Stake created and delegated. Signature: ${signature}\nStake account: ${stakeAccount}`,
+    `Stake created and delegated. Signature: ${signature}\nStake account: ${stakeAccount}${registrySaved ? "" : "\nWarning: local stake registry could not be updated."}`,
   );
 }
 
 export async function stakeList(context: CommandContext): Promise<void> {
   const owner = await requireWallet(context);
   const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const config = {
     commitment: context.config.commitment,
     encoding: "jsonParsed" as const,
@@ -351,16 +360,10 @@ export async function stakeList(context: CommandContext): Promise<void> {
   const byAddress = new Map<string, unknown>();
   for (const account of [...stakerAccounts, ...withdrawerAccounts])
     byAddress.set(String((account as any).pubkey), account);
-  const currentEpoch = BigInt(
-    (
-      await rpcRequest(
-        rpc.getEpochInfo({ commitment: context.config.commitment }),
-        "epoch lookup",
-      )
-    ).epoch,
-  );
-  const accounts = [...byAddress.entries()].map(([accountAddress, account]) =>
-    parseStakeAccount(accountAddress, account, currentEpoch),
+  const accounts = await Promise.all(
+    [...byAddress.entries()].map(([accountAddress, account]) =>
+      parseStakeAccount(context, accountAddress, account),
+    ),
   );
   for (const entry of registry.accounts)
     if (!byAddress.has(entry.address))
@@ -440,6 +443,10 @@ export async function stakeWithdraw(
   const owner = await requireWallet(context);
   const stakeAccount = parseAddress(command.args[0]!);
   const info = await getControlledStake(context, stakeAccount, "withdrawer");
+  if (info.locked)
+    throw new StakeAccountError(
+      "Stake account is still within its lockup; withdrawal is unavailable until the lockup expires or its custodian authorizes it.",
+    );
   const requested = flagValue(command, "amount")
     ? parseSol(flagValue(command, "amount")!)
     : info.withdrawableLamports;
@@ -494,6 +501,7 @@ async function runStakeInstruction(
 ): Promise<void> {
   const owner = await requireWallet(context);
   const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const latest = await rpcRequest(
     rpc.getLatestBlockhash({ commitment: context.config.commitment }),
     "recent blockhash lookup",
@@ -520,11 +528,10 @@ async function runStakeInstruction(
     cluster: context.config.cluster,
     dryRun: hasFlag(command, "dry-run") || context.session.dryRun,
   };
-  if (!context.output.json)
-    context.output.print(
-      { ok: true, preflight },
-      `${human}\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
-    );
+  context.output.preflight(
+    { ok: true, preflight },
+    `${human}\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
+  );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
       encoding: "base64",
@@ -595,9 +602,11 @@ async function getControlledStake(
   lamports: bigint;
   withdrawableLamports: bigint;
   rentReserveLamports: bigint;
-  state: "active" | "deactivating" | "inactive";
+  locked: boolean;
+  state: "active" | "deactivating" | "inactive" | "activating";
 }> {
   const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const response = await rpcRequest(
     rpc.getAccountInfo(account, {
       commitment: context.config.commitment,
@@ -607,6 +616,10 @@ async function getControlledStake(
   );
   if (!response.value)
     throw new StakeAccountError(`Stake account ${account} was not found.`);
+  if (String((response.value as any).owner) !== String(STAKE_PROGRAM_ADDRESS))
+    throw new StakeAccountError(
+      `Account ${account} is not owned by the Solana Stake Program.`,
+    );
   const info = (response.value as any).data?.parsed?.info;
   const authorized = info?.meta?.authorized;
   if (
@@ -621,9 +634,39 @@ async function getControlledStake(
   const delegation = info.stake?.delegation;
   const stakeLamports = BigInt(delegation?.stake ?? 0);
   const delegated = Boolean(delegation);
-  const state = delegation
-    ? await currentStakeState(context, delegation.deactivationEpoch)
-    : "inactive";
+  const lockup = info.meta.lockup;
+  let locked = false;
+  if (lockup) {
+    const lockupTimestamp = BigInt(lockup.unixTimestamp ?? 0);
+    const lockupEpoch = BigInt(lockup.epoch ?? 0);
+    if (lockupTimestamp > 0n || lockupEpoch > 0n) {
+      const epochInfo = await rpcRequest(
+        rpc.getEpochInfo({ commitment: context.config.commitment }),
+        "lockup epoch lookup",
+      );
+      const slot = await rpcRequest(
+        rpc.getSlot({ commitment: context.config.commitment }),
+        "lockup slot lookup",
+      );
+      const blockTime = await rpcRequest(
+        rpc.getBlockTime(slot as bigint),
+        "lockup chain-time lookup",
+      );
+      if (blockTime === null)
+        throw new StakeAccountError(
+          "Unable to verify stake lockup expiration from chain time.",
+        );
+      const wallet = await requireWallet(context);
+      locked =
+        (lockupEpoch > BigInt(epochInfo.epoch) ||
+          lockupTimestamp > BigInt(blockTime)) &&
+        String(lockup.custodian) !== String(wallet);
+    }
+  }
+  const activation = delegation
+    ? await getStakeActivation(context.config, account)
+    : { state: "inactive" as const };
+  const state = activation.state;
   const withdrawableLamports = state === "inactive" ? lamports : 0n;
   return {
     delegated,
@@ -632,6 +675,7 @@ async function getControlledStake(
     lamports,
     withdrawableLamports,
     rentReserveLamports,
+    locked,
     state,
   };
 }
@@ -642,30 +686,11 @@ function normalizeDeactivationEpoch(value: unknown): bigint | undefined {
   return epoch >= MAX_EPOCH ? undefined : epoch;
 }
 
-async function currentStakeState(
+async function parseStakeAccount(
   context: CommandContext,
-  deactivationEpoch: unknown,
-): Promise<"active" | "deactivating" | "inactive"> {
-  const normalized = normalizeDeactivationEpoch(deactivationEpoch);
-  if (normalized === undefined) return "active";
-  const epoch = BigInt(
-    (
-      await rpcRequest(
-        context
-          .getClient()
-          .rpc.getEpochInfo({ commitment: context.config.commitment }),
-        "epoch lookup",
-      )
-    ).epoch,
-  );
-  return normalized < epoch ? "inactive" : "deactivating";
-}
-
-function parseStakeAccount(
   accountAddress: string,
   account: unknown,
-  currentEpoch: bigint,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const value = (account as any).account;
   const info = value?.data?.parsed?.info;
   const lamports = BigInt(value?.lamports ?? 0);
@@ -677,15 +702,10 @@ function parseStakeAccount(
   const deactivationEpoch = normalizeDeactivationEpoch(
     delegation?.deactivationEpoch,
   );
-  const state = !delegation
-    ? "inactive"
-    : deactivationEpoch !== undefined && deactivationEpoch < currentEpoch
-      ? "inactive"
-      : deactivationEpoch !== undefined
-        ? "deactivating"
-        : activationEpoch !== undefined && activationEpoch >= currentEpoch
-          ? "activating"
-          : "active";
+  const state = delegation
+    ? (await getStakeActivation(context.config, parseAddress(accountAddress)))
+        .state
+    : "inactive";
   return {
     address: accountAddress,
     lamports,

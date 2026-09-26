@@ -5,7 +5,7 @@ import {
   RpcError,
 } from "../errors/errors.js";
 import { formatSol, formatUnits } from "../solana/amounts.js";
-import { rpcRequest } from "../solana/rpc.js";
+import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import { getTokenAccounts } from "../solana/tokens.js";
 import { listValidators } from "../solana/validators.js";
 import { getWalletAddress } from "../wallet/signer.js";
@@ -47,10 +47,10 @@ export async function showAddress(context: CommandContext): Promise<void> {
 
 export async function showBalance(context: CommandContext): Promise<void> {
   const wallet = await requireWallet(context);
+  const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const response = await rpcRequest(
-    context
-      .getClient()
-      .rpc.getBalance(wallet, { commitment: context.config.commitment }),
+    rpc.getBalance(wallet, { commitment: context.config.commitment }),
     "balance lookup",
   );
   const lamports = BigInt(response.value as bigint);
@@ -69,8 +69,10 @@ export async function showBalance(context: CommandContext): Promise<void> {
 
 export async function showTokenList(context: CommandContext): Promise<void> {
   const wallet = await requireWallet(context);
+  const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const accounts = await getTokenAccounts(
-    context.getClient().rpc,
+    rpc,
     wallet,
     context.config.commitment,
   );
@@ -99,8 +101,10 @@ export async function showTokenBalance(
   mint: string,
 ): Promise<void> {
   const wallet = await requireWallet(context);
+  const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const accounts = await getTokenAccounts(
-    context.getClient().rpc,
+    rpc,
     wallet,
     context.config.commitment,
   );
@@ -136,11 +140,9 @@ export async function showValidators(
   context: CommandContext,
   options: { limit?: number; currentOnly: boolean; maxCommission?: number },
 ): Promise<void> {
-  const rows = await listValidators(
-    context.getClient().rpc,
-    context.config.commitment,
-    options,
-  );
+  const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
+  const rows = await listValidators(rpc, context.config.commitment, options);
   context.completion.recentValidators = rows.map((row) => row.voteAccount);
   context.output.print(
     {

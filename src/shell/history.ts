@@ -8,6 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import bs58 from "bs58";
 import { historyFilePath, ensureConfigDir } from "../config/config.js";
 
 const MAX_HISTORY = 1000;
@@ -15,7 +16,25 @@ const SECRET_WORD =
   /(?:private[-_ ]?key|secret[-_ ]?key|seed[-_ ]?phrase|mnemonic|password|passphrase)/i;
 
 export function isSafeHistoryLine(line: string): boolean {
-  return Boolean(line.trim()) && !SECRET_WORD.test(line);
+  if (!line.trim() || SECRET_WORD.test(line)) return false;
+  // A key pasted by mistake does not contain words like "private key".
+  // Drop base58 strings that decode to Solana key sizes, and common raw hex or
+  // JSON-byte-array encodings. Signatures also match 64-byte base58 and are
+  // conservatively omitted from history for the same reason.
+  for (const token of line.split(/\s+/)) {
+    if (/^(?:[1-9A-HJ-NP-Za-km-z]{32,90})$/.test(token)) {
+      try {
+        const length = bs58.decode(token).length;
+        if (length === 32 || length === 64) return false;
+      } catch {
+        // Not valid base58; continue checking other token encodings.
+      }
+    }
+    if (/^(?:0x)?(?:[0-9a-f]{64}|[0-9a-f]{128})$/i.test(token)) return false;
+  }
+  if (/^\s*\[\s*(?:\d{1,3}\s*,\s*){31,63}\d{1,3}\s*\]\s*$/.test(line))
+    return false;
+  return true;
 }
 
 export async function readHistory(configDir: string): Promise<string[]> {

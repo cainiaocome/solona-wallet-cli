@@ -35,7 +35,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Keep private-key and passphrase input out of CLI arguments and environment variables.
 - Keep Jupiter Borrow, arbitrary lending assets, leverage, and arbitrary serialized Jupiter signing out of v0.2.
 - Canonical USDC is `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`; do not make the first integration an arbitrary-mint feature.
-- Keep `@solana/web3.js` and Jupiter-specific types inside `src/integrations/jupiter-lend/`; core wallet code remains on Kit.
+- Keep legacy Jupiter types inside `src/integrations/jupiter-lend/` and the legacy stake-activation RPC helper inside `src/integrations/stake-activation.ts`; the wallet's core transaction pipeline remains on Kit.
 - Preserve the supplied `docs/spec.md`; update user-facing documentation as implementation lands.
 
 ## Validation
@@ -58,3 +58,4 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Image publication now includes branch, bare short-commit, and legacy `latest` tags; the wrapper defaults to the repository's `master` image tag.
 - npm dependency installation now enforces the seven-day `min-release-age` policy in local installs, GitHub Actions, and Docker builds.
 - Supply-chain validation passes locally with the shell override removed: project npm config reports `7`, and `npm ci --dry-run --legacy-peer-deps` succeeds. The changed Docker install path must be validated by the next GitHub Actions run because no usable local Docker daemon is available.
+- Current review fixes are implemented: network reads and writes verify RPC genesis identity; keystore create-only writes are atomic; shell history detects raw key encodings; malformed boolean/value flags are rejected; confirmation checks status before expiry and includes signatures in errors; stake activation and lockup checks use RPC state; JSON preflight goes to stderr; npm age-policy documentation distinguishes resolution from lockfile reproduction. Formatting, Black, TypeScript lint/build, shell syntax, and diff checks pass. Unit and Docker E2E suites were not run in this pass.

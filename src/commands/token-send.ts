@@ -29,7 +29,7 @@ import {
   formatUnits,
   parseDecimalUnits,
 } from "../solana/amounts.js";
-import { rpcRequest } from "../solana/rpc.js";
+import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import {
   getTokenAccounts,
   TOKEN_2022_PROGRAM_ADDRESS,
@@ -60,6 +60,7 @@ export async function sendToken(
   const mint = parseAddress(mintValue);
   const destinationOwner = parseAddress(destinationValue);
   const rpc = context.getClient().rpc;
+  await assertRpcCluster(rpc, context.config.cluster);
   const mintInfo = await readMint(rpc, mint, context.config.commitment);
   if (mintInfo.program !== "spl-token" && mintInfo.program !== "token-2022")
     throw new RpcError(
@@ -210,11 +211,10 @@ export async function sendToken(
     cluster: context.config.cluster,
     dryRun,
   };
-  if (!context.output.json)
-    context.output.print(
-      { ok: true, preflight: summary },
-      `Action:       Send token\nMint:         ${mint}\nRaw amount:   ${rawAmount}\nUI amount:    ${formatUnits(rawAmount, mintInfo.decimals)}\nDestination:  ${destinationOwner}\nDestination ATA: ${destinationAta}\nATA cost:     ${formatSol(ataCreationCost)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
-    );
+  context.output.preflight(
+    { ok: true, preflight: summary },
+    `Action:       Send token\nMint:         ${mint}\nRaw amount:   ${rawAmount}\nUI amount:    ${formatUnits(rawAmount, mintInfo.decimals)}\nDestination:  ${destinationOwner}\nDestination ATA: ${destinationAta}\nATA cost:     ${formatSol(ataCreationCost)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
+  );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
       encoding: "base64",
