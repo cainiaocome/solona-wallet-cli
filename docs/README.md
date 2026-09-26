@@ -24,8 +24,14 @@ The more focused reference documents are also useful:
   decisions, dependency-install incident, release workflow, and known limits.
 - [Jupiter Lend Earn](jupiter-lend.md) documents the deliberately narrow v0.2
   mainnet USDC integration.
-- [Original specification](spec.md) is the product specification that guided
+- [Original specification](../specs/spec.md) is the product specification that guided
   the implementation. It is preserved as a reference rather than a tutorial.
+- [Multiple-wallet design](../specs/multiple-wallets-design.md) proposes the next
+  phase. Product specifications and design proposals live in `specs/`, separate
+  from the user and operational documentation in `docs/`.
+- [Multiple-wallet implementation specification](../specs/multiple-wallets-implementation.md)
+  defines the next phase's schemas, recovery behavior, command contracts, and
+  acceptance tests. These features are specified but not yet implemented.
 
 ## How to read the source
 

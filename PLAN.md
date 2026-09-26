@@ -1,8 +1,27 @@
 # Solana Wallet CLI implementation plan
 
+## Current handoff: v0.3 multiple-wallet specification
+
+- Goal: prepare an implementation-ready handoff for the approved multiple-wallet
+  direction. Runtime implementation has not started.
+- Complete: product design in `specs/multiple-wallets-design.md`; detailed
+  contracts, schemas, storage recovery, file map, and acceptance scenarios in
+  `specs/multiple-wallets-implementation.md`.
+- Required layout: one encrypted keystore per wallet in `wallets/<uuid>.json`,
+  separate alias/default registry, session selection independent of saved default.
+- Next coding session: read both specifications and repository state, then replace
+  this historical plan with the implementation milestones and actual progress.
+- This documentation task changes no application behavior. Validation is limited
+  to documentation formatting, local links, and diff checks; runtime and Docker
+  tests are not claimed for the proposed functionality.
+- Existing uncommitted specification relocation and formatter-glob changes are
+  retained. No commit or push has been requested for this handoff.
+
+The remainder records historical v0.2 work, not current validation results.
+
 ## Goal
 
-Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving the completed v0.1 wallet and adding the narrowly-scoped mainnet USDC Jupiter Lend Earn integration with tests, documentation, and CI validation.
+Implement the v0.2 Solana-only wallet described in `specs/spec.md`, preserving the completed v0.1 wallet and adding the narrowly-scoped mainnet USDC Jupiter Lend Earn integration with tests, documentation, and CI validation.
 
 ## Current state
 
@@ -37,7 +56,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Keep Jupiter Borrow, arbitrary lending assets, leverage, and arbitrary serialized Jupiter signing out of v0.2.
 - Canonical USDC is `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`; do not make the first integration an arbitrary-mint feature.
 - Keep legacy Jupiter types inside `src/integrations/jupiter-lend/` and the legacy stake-activation RPC helper inside `src/integrations/stake-activation.ts`; the wallet's core transaction pipeline remains on Kit.
-- Preserve the supplied `docs/spec.md`; update user-facing documentation as implementation lands.
+- Preserve the supplied `specs/spec.md`; update user-facing documentation as implementation lands.
 
 ## Validation
 
