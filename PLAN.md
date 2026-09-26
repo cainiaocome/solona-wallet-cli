@@ -8,6 +8,7 @@ while preserving signing safeguards and line-oriented JSON behavior.
 ## Current state
 
 - Baseline: clean `master` at `35bd90d`.
+- Implementation commit `6e5f0c4` is pushed to `master`.
 - [complete] `status` is an on-demand dashboard: it verifies RPC/network,
   reports SOL and aggregated token balances, and shows separate native-stake
   and mainnet Jupiter Lend positions. Failed sections remain unavailable, not
@@ -18,8 +19,8 @@ while preserving signing safeguards and line-oriented JSON behavior.
 - [complete] Added lightweight `--help`, no-wallet onboarding, help/usage/
   completion updates, beginner docs, and source comments for new boundaries.
 - [complete] Added unit and Docker/PTTY E2E coverage and updated beginner docs.
-- [in progress] Commit and push, verify GitHub Actions, and address any
-  workflow failures.
+- [complete] Commit/push and GitHub Actions validation; no workflow failures
+  required fixes.
 
 ## Constraints and decisions
 
@@ -41,4 +42,6 @@ while preserving signing safeguards and line-oriented JSON behavior.
 - `SOL_WALLET_E2E_IMAGE=sol-wallet:ux-review python3 test/e2e/run_tests.py`:
   all 14 Docker E2E tests passed.
 - `docker run --rm sol-wallet:ux-review --help`: passed with clean help output.
-- GitHub Actions for the final commit is not yet run.
+- GitHub Actions run `36275799426` for `6e5f0c4` passed npm installation,
+  formatting, all 62 unit tests, build, linux/amd64 image build, all 14 Docker
+  E2E tests, GHCR authentication, and publication of the exact tested image.
