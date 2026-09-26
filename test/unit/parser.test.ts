@@ -53,7 +53,7 @@ describe("wallet shell parser and completion", () => {
       })[0],
     ).toEqual(["create", "list", "deactivate", "withdraw"]);
     expect(
-      completeLine("lend ", {
+      completeLine("jupiter-lend ", {
         tokenMints: [],
         stakeAccounts: [],
         recentValidators: [],

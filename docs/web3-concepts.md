@@ -181,10 +181,10 @@ can change with protocol accounting and rates.
 In v0.2 this CLI supports only canonical mainnet USDC and only:
 
 ```text
-lend status
-lend deposit <amount>
-lend withdraw <amount>
-lend withdraw --all
+jupiter-lend status
+jupiter-lend deposit <amount>
+jupiter-lend withdraw <amount>
+jupiter-lend withdraw --all
 ```
 
 `withdraw --all` means the maximum currently available amount, bounded by both

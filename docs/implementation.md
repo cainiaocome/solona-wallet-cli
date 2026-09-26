@@ -53,7 +53,7 @@ readline or -c text
 
 Read-only address, balance, token, validator, and stake-list commands use the public keystore metadata and never invoke the signer. The `EncryptedKeystoreSigner` decrypts only from its `signTransactions` boundary; transaction handlers cannot call a `getPrivateKey()` method.
 
-`lend status` follows the same read-only rule. It uses `@jup-ag/lend-read` with the public wallet address and reports the SDK's supplied, withdrawable, receipt-share, and raw rate fields. Lend writes use `@jup-ag/lend` only to construct explicit Earn instructions, then convert them into the common Kit message and signer pipeline. Before network reads or writes, the configured RPC endpoint's genesis hash must match the selected mainnet or devnet cluster.
+`jupiter-lend status` follows the same read-only rule. It uses `@jup-ag/lend-read` with the public wallet address and reports the SDK's supplied, withdrawable, receipt-share, and raw rate fields. Jupiter Lend writes use `@jup-ag/lend` only to construct explicit Earn instructions, then convert them into the common Kit message and signer pipeline. Before network reads or writes, the configured RPC endpoint's genesis hash must match the selected mainnet or devnet cluster.
 
 ## Keystore format and recovery behavior
 

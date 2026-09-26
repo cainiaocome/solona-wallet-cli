@@ -87,10 +87,10 @@ stake list
 stake deactivate <stake-account>
 stake withdraw <stake-account> [--amount <amount>]
 tx inspect <signature>
-lend status
-lend deposit <amount>
-lend withdraw <amount>
-lend withdraw --all
+jupiter-lend status
+jupiter-lend deposit <amount>
+jupiter-lend withdraw <amount>
+jupiter-lend withdraw --all
 ```
 
 Every write command supports `--dry-run`, and confirmation can be skipped with `--yes` after validation and simulation still succeed. Automation uses the same parser and handlers as the shell:
@@ -98,12 +98,12 @@ Every write command supports `--dry-run`, and confirmation can be skipped with `
 ```bash
 sol-wallet -c "balance" --json
 sol-wallet -c "stake list" --cluster devnet --json
-sol-wallet -c "lend status" --json
+sol-wallet -c "jupiter-lend status" --json
 ```
 
 The default cluster is `mainnet-beta`; use `--cluster devnet`, `SOL_WALLET_CLUSTER=devnet`, or `set cluster devnet` for a session change. The current cluster is shown in prompts and write summaries, and network commands verify the RPC endpoint's genesis hash before using chain data or signing.
 
-Jupiter Lend commands require `mainnet-beta` and verify the canonical Solana USDC mint (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) is owned by the legacy SPL Token Program with six decimals. The command boundary uses Jupiter's official Earn SDK adapter; its legacy web3 types are isolated under `src/integrations/jupiter-lend/`.
+The provider-specific `jupiter-lend` command name keeps this Jupiter integration distinct and leaves the generic `lend` name available if additional protocols are added later. Jupiter Lend commands require `mainnet-beta` and verify the canonical Solana USDC mint (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) is owned by the legacy SPL Token Program with six decimals. The command boundary uses Jupiter's official Earn SDK adapter; its legacy web3 types are isolated under `src/integrations/jupiter-lend/`.
 
 ## Configuration and files
 

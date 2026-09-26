@@ -24,7 +24,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - [complete] Add Docker image, wrapper, mock RPC, E2E tests, and CI.
 - [complete] Run the post-review GitHub workflow and inspect its Docker E2E and publish result.
 - [complete] Verify the current stable Jupiter Lend SDK APIs and isolate legacy web3 types at the adapter boundary.
-- [complete] Implement mainnet canonical-USDC `lend status`, `deposit`, `withdraw`, and `withdraw --all`.
+- [complete] Implement mainnet canonical-USDC `jupiter-lend status`, `deposit`, `withdraw`, and `withdraw --all`.
 - [complete] Add v0.2 unit tests and operational/dependency-risk documentation.
 - [complete] Run v0.2 full validation and GitHub Docker workflow.
 - [complete] Expand beginner documentation and annotate the Web3/security boundaries in source code.
@@ -52,7 +52,7 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Direct deterministic mock-RPC test: SOL dry-run and signed confirmation path passing.
 - Direct non-TTY shell smoke test: piped `help`/`exit` exits 0; unknown flags exit 2.
 - Deterministic mock-RPC smoke test: JSON SOL dry-run parses as one object and confirms no passphrase/output leakage.
-- v0.2 command smoke tests: help/completion expose `lend`; devnet lending is rejected before wallet/network use after the mainnet guard.
+- v0.2 command smoke tests: help/completion expose `jupiter-lend`; devnet lending is rejected before wallet/network use after the mainnet guard.
 - Docker E2E: post-review GitHub Actions run 35482612396 passed all 9 image tests and published the exact tested image; Docker remains unavailable in this workspace.
 - Documentation-only follow-up validation passes: Prettier, Black, 23 unit tests, TypeScript lint, build, and `git diff --check`.
 - Image publication now includes branch, bare short-commit, and legacy `latest` tags; the wrapper defaults to the repository's `master` image tag.
@@ -61,3 +61,4 @@ Implement the v0.2 Solana-only wallet described in `docs/spec.md`, preserving th
 - Current review fixes are implemented: network reads and writes verify RPC genesis identity; keystore create-only writes are atomic; shell history detects raw key encodings; malformed boolean/value flags are rejected; confirmation checks status before expiry and includes signatures in errors; stake activation and lockup checks use RPC state; JSON preflight goes to stderr; npm age-policy documentation distinguishes resolution from lockfile reproduction. Formatting, Black, TypeScript lint/build, shell syntax, and diff checks pass. Unit and Docker E2E suites were not run in this pass.
 - The host wrapper now pulls its selected image tag before each invocation and stops on pull failure rather than silently using stale cached content.
 - Bare command groups display their usage and available subcommands instead of producing a self-referential unknown-command suggestion.
+- The user-facing Jupiter integration command is named `jupiter-lend`, reserving `lend` for possible future multi-protocol routing.

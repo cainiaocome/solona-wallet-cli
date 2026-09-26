@@ -58,7 +58,7 @@ const TOP_LEVEL = [
   "token",
   "validators",
   "stake",
-  "lend",
+  "jupiter-lend",
   "tx",
   "set",
   "show",
@@ -182,8 +182,8 @@ export async function executeParsed(
         return executeTx(context, command);
       case "stake":
         return executeStake(context, command);
-      case "lend":
-        return executeLend(context, command);
+      case "jupiter-lend":
+        return executeJupiterLend(context, command);
       default:
         throw unknownCommand(command.name);
     }
@@ -246,25 +246,29 @@ async function executeToken(
   return { exit: false };
 }
 
-async function executeLend(
+async function executeJupiterLend(
   context: CommandContext,
   command: ParsedCommand,
 ): Promise<ExecutionResult> {
   const subcommand = command.args[0];
   if (!subcommand) {
-    displayTopicHelp(context, "lend");
+    displayTopicHelp(context, "jupiter-lend");
     return { exit: false };
   }
   const args = { ...command, args: command.args.slice(1) };
   if (subcommand === "status") {
-    rejectExtraArgs(args, 0, "lend status");
+    rejectExtraArgs(args, 0, "jupiter-lend status");
     await lendStatus(context);
   } else if (subcommand === "deposit") {
-    rejectExtraArgs(args, 1, "lend deposit <amount> [--dry-run] [--yes]");
+    rejectExtraArgs(
+      args,
+      1,
+      "jupiter-lend deposit <amount> [--dry-run] [--yes]",
+    );
     await lendDeposit(context, args);
   } else if (subcommand === "withdraw") {
     await lendWithdraw(context, args);
-  } else throw unknownCommand(`lend ${subcommand ?? ""}`.trim());
+  } else throw unknownCommand(`jupiter-lend ${subcommand ?? ""}`.trim());
   return { exit: false };
 }
 
@@ -412,7 +416,7 @@ function validateFlags(command: ParsedCommand): void {
   } else if (name === "token" && subcommand === "send") {
     allowed.add("dry-run");
     allowed.add("yes");
-  } else if (name === "lend") {
+  } else if (name === "jupiter-lend") {
     if (subcommand === "deposit" || subcommand === "withdraw") {
       allowed.add("dry-run");
       allowed.add("yes");

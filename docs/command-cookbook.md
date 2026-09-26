@@ -148,7 +148,7 @@ staking: the wallet creates and controls a real Stake Program account.
 First check the canonical mainnet USDC position:
 
 ```text
-lend status
+jupiter-lend status
 ```
 
 The command reports supplied assets, protocol liquidity, and the smaller
@@ -158,19 +158,19 @@ demo.
 Deposit after independently checking the amount and protocol:
 
 ```text
-lend deposit 1 --dry-run
+jupiter-lend deposit 1 --dry-run
 ```
 
 Withdraw a specific amount:
 
 ```text
-lend withdraw 0.5 --dry-run
+jupiter-lend withdraw 0.5 --dry-run
 ```
 
 Withdraw the maximum currently available for the position:
 
 ```text
-lend withdraw --all --dry-run
+jupiter-lend withdraw --all --dry-run
 ```
 
 When all supplied assets are available, `--all` redeems the exact receipt
@@ -195,7 +195,7 @@ help
 help stake
 token
 stake
-lend
+jupiter-lend
 history
 clear
 exit

@@ -61,7 +61,7 @@ export async function lendDeposit(
   command: ParsedCommand,
 ): Promise<void> {
   if (command.args.length !== 1)
-    throw new JupiterLendError("Usage: lend deposit <amount>.");
+    throw new JupiterLendError("Usage: jupiter-lend deposit <amount>.");
   const amount = parseUsdcAmount(command.args[0]!);
   const adapter = createAdapter(context);
   const owner = await requireWallet(context);
@@ -103,11 +103,11 @@ export async function lendWithdraw(
     (hasFlag(command, "all") && command.args.length)
   )
     throw new JupiterLendError(
-      "Usage: lend withdraw <amount> | lend withdraw --all.",
+      "Usage: jupiter-lend withdraw <amount> | jupiter-lend withdraw --all.",
     );
   if (!hasFlag(command, "all") && command.args.length !== 1)
     throw new JupiterLendError(
-      "Usage: lend withdraw <amount> | lend withdraw --all.",
+      "Usage: jupiter-lend withdraw <amount> | jupiter-lend withdraw --all.",
     );
   const adapter = createAdapter(context);
   const owner = await requireWallet(context);
@@ -344,7 +344,7 @@ export function resolveWithdrawAmount(
 ): bigint {
   if (!withdrawAll && value === undefined)
     throw new JupiterLendError(
-      "Usage: lend withdraw <amount> | lend withdraw --all.",
+      "Usage: jupiter-lend withdraw <amount> | jupiter-lend withdraw --all.",
     );
   const amount = withdrawAll ? withdrawable : parseUsdcAmount(value!);
   if (amount <= 0n)

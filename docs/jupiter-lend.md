@@ -2,15 +2,19 @@
 
 This document describes the v0.2 Jupiter Lend scope and the operational boundary around it. It is intentionally narrower than a general lending client.
 
+The CLI command prefix is `jupiter-lend` because it names this provider's
+integration explicitly. A future multi-protocol lending router can use the
+generic `lend` name without making it unclear which protocol handles a command.
+
 ## Supported surface
 
 The wallet supports only these commands:
 
 ```text
-lend status
-lend deposit <amount>
-lend withdraw <amount>
-lend withdraw --all
+jupiter-lend status
+jupiter-lend deposit <amount>
+jupiter-lend withdraw <amount>
+jupiter-lend withdraw --all
 ```
 
 The asset is hard-coded to canonical mainnet Solana USDC:
@@ -33,7 +37,7 @@ The pinned non-prerelease SDK exposes the basic Earn deposit/withdraw/redeem bui
 
 ## Read behavior
 
-`lend status` does not unlock the keystore. It reports:
+`jupiter-lend status` does not unlock the keystore. It reports:
 
 - wallet and canonical asset
 - wallet USDC balance
@@ -42,7 +46,7 @@ The pinned non-prerelease SDK exposes the basic Earn deposit/withdraw/redeem bui
 - receipt-token mint/account and shares
 - supply and rewards rates as raw protocol values, without inventing a percentage scale
 
-The adapter reports both the protocol's current liquidity limit and the user's supplied assets. `currentlyWithdrawable` is the smaller of those values and is authoritative for `lend withdraw <amount>` validation and for `lend withdraw --all`. The command never guesses a maximum from a receipt-token balance.
+The adapter reports both the protocol's current liquidity limit and the user's supplied assets. `currentlyWithdrawable` is the smaller of those values and is authoritative for `jupiter-lend withdraw <amount>` validation and for `jupiter-lend withdraw --all`. The command never guesses a maximum from a receipt-token balance.
 
 ## Write behavior
 

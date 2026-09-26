@@ -142,7 +142,7 @@ token list
 token balance <mint>
 validators --limit 10
 stake list
-lend status
+jupiter-lend status
 ```
 
 Most of them use an RPC request. RPC means “Remote Procedure Call”: the CLI
@@ -160,7 +160,7 @@ that asks one or more Solana programs to change on-chain state. Use
 send <destination> 0.001 --dry-run
 token send <mint> <destination> 1.5 --dry-run
 stake create 1 --validator <vote-account> --dry-run
-lend deposit 1 --dry-run
+jupiter-lend deposit 1 --dry-run
 ```
 
 Dry-run validates the input, builds the transaction, and asks the RPC node to

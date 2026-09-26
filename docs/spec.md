@@ -144,10 +144,10 @@ Codex should finish, test, and stabilize all v0.1 wallet functionality before st
 v0.2 may add a narrowly-scoped Jupiter Lend integration for **USDC Earn only**:
 
 ```bash
-sol-wallet lend status
-sol-wallet lend deposit <amount>
-sol-wallet lend withdraw <amount>
-sol-wallet lend withdraw --all
+sol-wallet jupiter-lend status
+sol-wallet jupiter-lend deposit <amount>
+sol-wallet jupiter-lend withdraw <amount>
+sol-wallet jupiter-lend withdraw --all
 ```
 
 Initial v0.2 scope:
@@ -717,10 +717,10 @@ tx inspect <signature>
 ### Future v0.2 Jupiter Lend
 
 ```text
-lend status
-lend deposit <amount>
-lend withdraw <amount>
-lend withdraw --all
+jupiter-lend status
+jupiter-lend deposit <amount>
+jupiter-lend withdraw <amount>
+jupiter-lend withdraw --all
 ```
 
 ### Session commands
@@ -2120,15 +2120,19 @@ This is useful for future agent automation without adding an HTTP server.
 
 ## 24.1 v0.2 — Jupiter Lend USDC Earn design
 
+The implemented provider-specific command prefix is `jupiter-lend`. Reserve
+the generic `lend` command name for a future protocol selector if more lending
+providers are integrated.
+
 This section is **future work** and must not block the v0.1 implementation.
 
 ### Commands
 
 ```bash
-sol-wallet lend status
-sol-wallet lend deposit <amount>
-sol-wallet lend withdraw <amount>
-sol-wallet lend withdraw --all
+sol-wallet jupiter-lend status
+sol-wallet jupiter-lend deposit <amount>
+sol-wallet jupiter-lend withdraw <amount>
+sol-wallet jupiter-lend withdraw --all
 ```
 
 ### Asset restriction
@@ -2179,7 +2183,7 @@ interface JupiterLendAdapter {
 
 The rest of the wallet must not depend on Jupiter SDK-specific types.
 
-### `lend status`
+### `jupiter-lend status`
 
 Read-only.
 
@@ -2203,7 +2207,7 @@ If Jupiter exposes multiple rate concepts, label them exactly and avoid inventin
 ### Deposit
 
 ```bash
-sol-wallet lend deposit 100
+sol-wallet jupiter-lend deposit 100
 ```
 
 Behavior:
@@ -2239,13 +2243,13 @@ If the protocol mints or transfers a receipt/yield-bearing token as part of the 
 ### Withdraw
 
 ```bash
-sol-wallet lend withdraw 25
+sol-wallet jupiter-lend withdraw 25
 ```
 
 or:
 
 ```bash
-sol-wallet lend withdraw --all
+sol-wallet jupiter-lend withdraw --all
 ```
 
 Behavior:
@@ -2331,7 +2335,7 @@ Add unit tests for:
 - insufficient USDC balance
 - insufficient/temporarily unavailable protocol liquidity
 - failed simulation prevents broadcast
-- read-only `lend status` never decrypts the key
+- read-only `jupiter-lend status` never decrypts the key
 
 Add opt-in integration tests using the safest practical environment supported by the current Jupiter tooling.
 
@@ -3257,7 +3261,7 @@ Start this phase only after v0.1 is complete.
 
 - add isolated Jupiter Lend integration adapter
 - verify current official Jupiter Lend SDK APIs
-- `lend status`
+- `jupiter-lend status`
 - USDC deposit
 - USDC withdraw
 - `withdraw --all`
@@ -3398,7 +3402,7 @@ Begin only after v0.1 is stable.
 Includes only:
 
 ```text
-lend status
+jupiter-lend status
 USDC deposit
 USDC withdraw
 USDC withdraw --all
