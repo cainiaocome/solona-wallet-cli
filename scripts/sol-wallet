@@ -19,6 +19,11 @@ fi
 # 10001 for direct use; the wrapper uses the caller's UID/GID for 0700 mounts.
 USER_ARGS=(--user "$(id -u):$(id -g)")
 
+# Always refresh the configured tag before launching so a cached image never
+# silently hides a newer published release. With `set -e`, pull failures stop
+# here instead of falling back to stale local content.
+docker pull "$IMAGE"
+
 exec docker run --rm \
   "${TTY_ARGS[@]}" \
   "${USER_ARGS[@]}" \
