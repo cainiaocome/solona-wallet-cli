@@ -4,7 +4,8 @@ const HELP: Record<string, string> = {
   address | balance
   send <destination> <amount>
   token list | token balance <mint> | token send <mint> <destination> <amount>
-  validators [--limit n] [--current-only] [--max-commission percent]
+  validators [--limit n] [--include-delinquent] [--max-commission percent]
+    (current validators only by default)
   stake create <amount> --validator <vote-account>
   stake list | stake deactivate <stake-account> | stake withdraw <stake-account> [--amount n]
   jupiter-lend status | jupiter-lend deposit <amount> | jupiter-lend withdraw <amount> | jupiter-lend withdraw --all
@@ -30,7 +31,7 @@ Aliases are local names; transactions always show and use the full address.`,
   token:
     "token list\ntoken balance <mint>\ntoken send <mint> <destination> <amount> [--dry-run] [--yes]",
   validators:
-    "validators [--limit <n>] [--current-only] [--max-commission <percent>]",
+    "validators [--limit <n>] [--include-delinquent] [--max-commission <percent>]\nDelinquent validators are excluded by default; use --include-delinquent to include them.",
   stake:
     "stake create <amount> --validator <vote-account>\nstake list\nstake deactivate <stake-account>\nstake withdraw <stake-account> [--amount <amount>]",
   "jupiter-lend":

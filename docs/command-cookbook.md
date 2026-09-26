@@ -125,9 +125,13 @@ their transfer semantics are modeled explicitly.
 Inspect validator data before choosing one:
 
 ```text
-validators --limit 20 --current-only
+validators --limit 20
 validators --max-commission 8
+validators --include-delinquent
 ```
+
+Delinquent validators are hidden by default. Add `--include-delinquent` when
+you want to include them in the results.
 
 Create and delegate a native stake account:
 

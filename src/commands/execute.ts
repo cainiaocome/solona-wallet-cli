@@ -168,7 +168,9 @@ export async function executeParsed(
         );
         await showValidators(context, {
           limit: parseOptionalInteger(flagValue(command, "limit"), "limit", 1),
-          currentOnly: hasFlag(command, "current-only"),
+          currentOnly:
+            hasFlag(command, "current-only") ||
+            !hasFlag(command, "include-delinquent"),
           maxCommission: parseOptionalNumber(
             flagValue(command, "max-commission"),
             "max-commission",
@@ -523,6 +525,7 @@ function validateFlags(command: ParsedCommand): void {
   } else if (name === "validators") {
     allowed.add("limit");
     allowed.add("current-only");
+    allowed.add("include-delinquent");
     allowed.add("max-commission");
   } else if (name === "wallet" && subcommand === "import") {
     allowed.add("keypair-file");
@@ -552,6 +555,7 @@ function validateFlags(command: ParsedCommand): void {
     "dry-run",
     "yes",
     "current-only",
+    "include-delinquent",
     "all",
   ]);
   const valueFlags = new Set([
