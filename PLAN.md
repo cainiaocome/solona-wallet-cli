@@ -90,4 +90,8 @@ echo/history behavior is an explicit user-approved exception and remains.
   14 Docker E2E tests pass. Wallet B's submitted SOL, token, and stake
   transactions are decoded; B is checked as fee payer and each signature is
   verified with Node's Ed25519 implementation.
-- No live-chain writes were performed. Changes remain local and uncommitted.
+- GitHub Actions run `36269328619` for commit `f82c1e8` passed dependency
+  installation and the npm release-age policy, formatting, 45 unit tests,
+  TypeScript build, `linux/amd64` image build, Docker E2E, GHCR authentication,
+  and publication of the exact tested image.
+- No live-chain writes were performed. Commit `f82c1e8` is pushed to `master`.

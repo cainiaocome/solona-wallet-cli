@@ -154,8 +154,13 @@ Black checks, and `git diff --check`. The rebuilt `linux/amd64` image passed all
 14 Docker E2E tests. The harness cryptographically verifies wallet B as fee
 payer and signer for SOL, token, and stake transactions; deterministic Jupiter
 deposit and withdrawal tests verify B's signature at the signing boundary. No
-live-chain write was performed. These review changes are local and have not
-been committed or published.
+live-chain write was performed. Commit `f82c1e8` was pushed to `master`.
+[GitHub Actions run 36269328619](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36269328619)
+passed dependency installation and the npm release-age policy, formatting, 45
+unit tests, TypeScript build, `linux/amd64` image build, Docker E2E, GHCR
+authentication, and publication of the exact tested image. The run completed
+with non-failing notices about actions pinned to Node.js 20 being forced onto
+Node.js 24, and the planned `ubuntu-latest` migration to Ubuntu 26.
 
 ## Known operational limits
 
