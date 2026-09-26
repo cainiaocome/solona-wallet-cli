@@ -7,13 +7,21 @@ this document before putting any value on an address controlled by it.
 
 - The private key is not accepted as a CLI argument or environment variable.
 - The keystore passphrase is requested interactively and is not stored.
+- Each named wallet has an independently encrypted UUID-named keystore. The
+  alias registry stores only public identifiers and the saved default.
+- Each command captures one wallet identity before reading or building a
+  transaction. The signer checks the encrypted file and derived key against
+  that exact address before signing.
 - The keystore uses Argon2id to derive a 32-byte encryption key and AES-256-GCM
   to encrypt the normalized Solana secret key.
 - Public keystore metadata is authenticated as AES-GCM additional authenticated
   data, so changing the public address or crypto parameters invalidates the
   ciphertext.
-- New keystores are written through a unique temporary file, synced, chmod'ed
-  to `0600`, and atomically renamed. Existing keystores are not overwritten.
+- The keystore reader rejects unknown fields, so plaintext key data cannot be
+  silently carried alongside the encrypted payload.
+- New keystores are written to a unique temporary file, synced, and published
+  under a UUID with create-only hard-link semantics and mode `0600`. Existing
+  keystores are not overwritten; registry changes are locked and atomic.
 - A signer is created only after validation, simulation, and confirmation.
 - Secrets are filtered from shell history and redacted from verbose error
   details where practical. History also rejects likely raw base58, hex, and
@@ -49,13 +57,18 @@ this document before putting any value on an address controlled by it.
 3. Prefer devnet for learning and `--dry-run` for every unfamiliar write.
 4. Verify the cluster, destination, asset mint, amount, and fee before
    approving a transaction.
-5. Treat a transaction signature as sensitive operational data: record it with
+5. Enter wallet passphrases only through the hidden interactive terminal
+   prompt; piped input is rejected.
+6. Treat a transaction signature as sensitive operational data: record it with
    its cluster, but never confuse it with a private key.
-6. After a timeout, inspect the signature before retrying.
-7. Never add secrets to `.env`, `config.json`, fixtures, issue text, logs, or
+7. After a timeout, inspect the signature before retrying.
+8. Never add secrets to `.env`, `config.json`, fixtures, issue text, logs, or
    commit history.
-8. Do not run `npm audit fix` blindly against the pinned Jupiter SDK graph;
+9. Do not run `npm audit fix` blindly against the pinned Jupiter SDK graph;
    review SDK compatibility and the resulting lockfile together.
+
+For wallet backups, migration from the old `keystore.json`, orphan recovery, and
+stale store locks, follow [the multiple-wallet guide](multiple-wallets.md).
 
 ## Local validation
 
@@ -144,9 +157,10 @@ test/fixtures/disposable-keypair.json
 ```
 
 The mock RPC in `test/e2e/mock_rpc.py` provides predictable responses for the
-Docker harness. Unit tests inject fake clients or test pure conversion logic.
-No automated test should unlock a developer wallet or broadcast a real
-mainnet lending transaction.
+Docker harness. Multi-wallet E2E coverage generates its second random keypair
+in a temporary directory at runtime; do not add another checked-in keypair.
+Unit tests inject fake clients or test pure conversion logic. No automated test
+should unlock a developer wallet or broadcast a real mainnet lending transaction.
 
 ## Review checklist for changes
 

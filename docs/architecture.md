@@ -8,7 +8,8 @@ who wants to read the TypeScript source or make a small safe change.
 ```text
 CLI arguments
   -> configuration
-  -> command context
+  -> wallet registry (resolve UUID and alias once per command)
+  -> command context (captured selected-wallet identity)
   -> REPL or one-shot command
   -> parser and dispatcher
   -> command handler
@@ -20,6 +21,13 @@ CLI arguments
   -> broadcast and confirmation polling
   -> human or JSON output
 ```
+
+The wallet registry stores aliases and the saved default. Each
+`wallets/<uuid>.json` stores one independently encrypted key. A command resolves
+the current UUID and address before entering feature code. The signer receives
+that exact keystore path and expected address; it never looks up a mutable
+default or an alias while signing. Stake hints are stored under the UUID and
+network, while balances and protocol positions remain on Solana.
 
 The direction matters. Core wallet code knows how to validate, build, and sign
 transactions, but it does not know Jupiter's legacy SDK types. The Jupiter
@@ -44,6 +52,7 @@ adapter knows those types, but it cannot unlock the keystore by itself.
 | `src/solana/rpc.ts`                    | RPC client creation and error conversion             | How are node failures reported?                      |
 | `src/solana/tokens.ts`                 | Parsed SPL and Token-2022 accounts                   | What does `token list` read?                         |
 | `src/wallet/keystore.ts`               | Key parsing, encryption, atomic persistence          | Where is key material handled?                       |
+| `src/wallet/store.ts`                  | UUID keystores, public registry, and writer lock     | How are aliases mapped safely to keys?               |
 | `src/wallet/signer.ts`                 | Lazy keystore unlock and transaction signing         | When can the private key be used?                    |
 | `src/integrations/jupiter-lend/`       | Legacy SDK isolation and instruction conversion      | Where is Jupiter-specific code?                      |
 | `src/integrations/stake-activation.ts` | RPC-derived stake activation state                   | How does the CLI know cooldown has finished?         |

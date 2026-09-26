@@ -119,6 +119,7 @@ const valueFlags = new Set([
   "cluster",
   "commitment",
   "keypair-file",
+  "wallet",
 ]);
 
 function expectsFlagValue(flag: string): boolean {

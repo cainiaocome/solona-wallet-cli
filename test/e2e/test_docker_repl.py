@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from mock_rpc import start_server
+from keypair import write_keypair
 
 IMAGE = os.environ.get("SOL_WALLET_E2E_IMAGE")
 
@@ -24,7 +25,7 @@ class DockerReplTests(unittest.TestCase):
         directory = Path(tempfile.mkdtemp(prefix="sol-wallet-repl-"))
         child = self.spawn(pexpect, directory, port)
         try:
-            child.expect(r"sol-wallet \[devnet no-wallet\]>")
+            child.expect(r"sol-wallet \[devnet \| no-wallet\]>")
             child.send("tok\t")
             child.expect("token")
             child.send(" \t\t")
@@ -33,7 +34,7 @@ class DockerReplTests(unittest.TestCase):
             child.sendline("help")
             child.expect("wallet import")
             child.sendline("address")
-            child.expect("No wallet is imported")
+            child.expect("No wallet is selected")
             child.sendline("exit")
             child.expect(pexpect.EOF)
             child.close()
@@ -42,7 +43,7 @@ class DockerReplTests(unittest.TestCase):
 
             second = self.spawn(pexpect, directory, port)
             try:
-                second.expect(r"sol-wallet \[devnet no-wallet\]>")
+                second.expect(r"sol-wallet \[devnet \| no-wallet\]>")
                 second.sendline("history")
                 second.expect("help")
                 second.sendline("password should not persist")
@@ -72,32 +73,56 @@ class DockerReplTests(unittest.TestCase):
         directory = Path(tempfile.mkdtemp(prefix="sol-wallet-import-"))
         fixture = Path(__file__).parents[1] / "fixtures" / "disposable-keypair.json"
         shutil.copyfile(fixture, directory / "keypair.json")
+        write_keypair(directory / "keypair-secondary.json")
         child = self.spawn(pexpect, directory, port)
         passphrase = "correct horse battery staple"
         try:
-            child.expect(r"sol-wallet \[devnet no-wallet\]>")
+            child.expect(r"sol-wallet \[devnet \| no-wallet\]>")
             child.sendline(
-                "wallet import --keypair-file "
+                "wallet import primary --keypair-file "
                 "/home/solwallet/.config/sol-wallet/keypair.json"
             )
-            child.expect("Derived address:")
+            child.expect("Derived address for 'primary':")
             child.sendline("y")
             child.expect("New keystore passphrase:")
             child.sendline(passphrase)
             child.expect("Confirm passphrase:")
             child.sendline(passphrase)
-            child.expect("Wallet imported")
-            child.expect(r"sol-wallet \[devnet [^]]+\]>")
+            child.expect("Wallet 'primary' imported")
+            child.expect(r"sol-wallet \[devnet \| primary \| [^]]+\]>")
 
-            keystore = (directory / "keystore.json").read_text()
+            keystore = next((directory / "wallets").glob("*.json")).read_text()
             self.assertNotIn(passphrase, keystore)
             self.assertNotIn((directory / "keypair.json").read_text(), keystore)
 
+            child.sendline(
+                "wallet import secondary --keypair-file "
+                "/home/solwallet/.config/sol-wallet/keypair-secondary.json"
+            )
+            child.expect("Derived address for 'secondary':")
+            child.sendline("y")
+            child.expect("New keystore passphrase:")
+            child.sendline("secondary test passphrase")
+            child.expect("Confirm passphrase:")
+            child.sendline("secondary test passphrase")
+            child.expect("Wallet 'secondary' imported")
+            for wallet_file in (directory / "wallets").glob("*.json"):
+                self.assertNotIn("secondary test passphrase", wallet_file.read_text())
+            child.sendline("wallet list")
+            child.expect("primary")
+            child.expect("secondary")
+            child.sendline("wallet rename secondary vault")
+            child.expect("Wallet renamed: secondary → vault")
+            child.sendline("wallet use vault")
+            child.expect("Current wallet: vault")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
+
             child.sendline("send 11111111111111111111111111111112 1 --yes")
-            child.expect("Keystore passphrase:")
-            child.sendline(passphrase)
+            child.expect("Wallet: vault")
+            child.expect("Passphrase for vault")
+            child.sendline("secondary test passphrase")
             child.expect("Transaction confirmed")
-            child.expect(r"sol-wallet \[devnet [^]]+\]>")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
             child.send("stake ")
             child.send("\t\t")

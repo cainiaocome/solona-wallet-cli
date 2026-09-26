@@ -22,6 +22,7 @@ import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import { parseAddress } from "../wallet/address.js";
 import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 import { requireWallet } from "./read-only.js";
+import { requireSelectedWallet } from "./read-only.js";
 import type { CommandContext } from "./context.js";
 
 /**
@@ -40,6 +41,7 @@ export async function sendSol(
   yes: boolean,
 ): Promise<void> {
   const source = await requireWallet(context);
+  const selectedWallet = await requireSelectedWallet(context);
   const destination = parseAddress(destinationValue);
   const lamports = parseSol(amountValue);
   const rpc = context.getClient().rpc;
@@ -54,8 +56,7 @@ export async function sendSol(
     "recent blockhash lookup",
   );
   const signer = new EncryptedKeystoreSigner(
-    context.config.configDir,
-    source,
+    selectedWallet,
     context.readPassphrase,
   );
   let message: any = createTransactionMessage({ version: 0 });

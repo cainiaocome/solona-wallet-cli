@@ -37,7 +37,7 @@ import {
 } from "../solana/tokens.js";
 import { parseAddress } from "../wallet/address.js";
 import { EncryptedKeystoreSigner } from "../wallet/signer.js";
-import { requireWallet } from "./read-only.js";
+import { requireSelectedWallet, requireWallet } from "./read-only.js";
 import type { CommandContext } from "./context.js";
 import { confirmSignature } from "./send.js";
 
@@ -57,6 +57,7 @@ export async function sendToken(
   yes: boolean,
 ): Promise<void> {
   const owner = await requireWallet(context);
+  const selectedWallet = await requireSelectedWallet(context);
   const mint = parseAddress(mintValue);
   const destinationOwner = parseAddress(destinationValue);
   const rpc = context.getClient().rpc;
@@ -115,8 +116,7 @@ export async function sendToken(
     mint,
   });
   const signer = new EncryptedKeystoreSigner(
-    context.config.configDir,
-    owner,
+    selectedWallet,
     context.readPassphrase,
   );
   const instructions = [] as any[];

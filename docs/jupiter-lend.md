@@ -23,6 +23,12 @@ The asset is hard-coded to canonical mainnet Solana USDC:
 EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
 ```
 
+All reads and transactions use the selected wallet. Switch with `wallet use
+<alias>` in the shell or choose one for a one-shot command with
+`sol-wallet --wallet <alias> -c "jupiter-lend status" --json`. Previews show
+the alias and full signing address. See [the multiple-wallet guide](multiple-wallets.md)
+for current/default behavior and backups.
+
 Before every operation the adapter requires `mainnet`, verifies the mint is owned by the legacy SPL Token Program, and verifies six decimals. A display symbol or user-selected mint is never used as the asset identity. Borrowing, collateral, leverage, liquidation, arbitrary assets, and arbitrary Jupiter transaction signing are not implemented.
 
 ## SDK boundary

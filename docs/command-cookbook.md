@@ -33,15 +33,25 @@ send <destination> 0.001 --yes
 ## Wallet and public identity
 
 ```text
-wallet import
-wallet import --keypair-file /secure/path/id.json
-wallet info
+wallet import daily
+wallet import savings --keypair-file /secure/path/id.json
+wallet list
+wallet info savings
+wallet use savings
+wallet default daily
+wallet rename daily checking
+status
 address
 ```
 
-`wallet import` creates the one local encrypted keystore. Replacement is not
-supported in v0.2, so import into a new `SOL_WALLET_CONFIG_DIR` if you are
-learning with another key:
+Each import writes a separate UUID-named encrypted keystore. The alias in the
+registry is a local label; always verify the full address shown in status and
+transaction previews. `wallet use` changes only this process, while
+`wallet default` changes the choice for future processes. A one-shot command can
+choose explicitly with `sol-wallet --wallet savings -c "balance" --json`.
+See [the multiple-wallet guide](multiple-wallets.md) for recovery and migration.
+
+To experiment with a fully separate store, set another configuration directory:
 
 ```bash
 SOL_WALLET_CONFIG_DIR=/tmp/sol-wallet-demo sol-wallet

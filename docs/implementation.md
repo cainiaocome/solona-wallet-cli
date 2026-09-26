@@ -1,12 +1,12 @@
 # Implementation and operations guide
 
-This document records how the repository implements the supplied v0.1 specification plus the narrowly-scoped v0.2 Jupiter Lend Earn extension. It is intentionally operational: it explains the boundaries a future contributor must preserve, the validation that has actually run, and the environment-specific issues encountered while bootstrapping dependencies. For a first introduction, use the [documentation map](README.md) and [getting-started guide](getting-started.md) first.
+This document records the original v0.1/v0.2 implementation and dependency bootstrap. The current v0.3 multi-wallet design and recovery contract are described in [multiple-wallets.md](multiple-wallets.md) and the specifications under `specs/`. For a first introduction, use the [documentation map](README.md) and [getting-started guide](getting-started.md) first.
 
 ## Status
 
-The application is implemented as a strict ESM TypeScript CLI. The current v0.2 implementation includes:
+The published v0.2 baseline was implemented as a strict ESM TypeScript CLI. It included:
 
-- one-wallet encrypted local keystore with address-only public reads
+- a single encrypted local keystore with address-only public reads
 - hidden import/passphrase prompts and Solana CLI JSON keypair input
 - Argon2id key derivation with 64 MiB memory, three iterations, one lane
 - AES-256-GCM with random salt and nonce, authenticated public metadata, atomic `0600` writes
@@ -20,6 +20,11 @@ The application is implemented as a strict ESM TypeScript CLI. The current v0.2 
 - isolated Jupiter Lend Earn USDC status, deposit, withdraw, and withdraw-all commands
 - canonical mainnet USDC verification, official SDK instruction adaptation, protocol-reported withdrawability, and common transaction safety
 - typed application errors and documented exit-code categories
+
+The current checkout extends that baseline with multiple UUID-named encrypted
+keystores, an alias/default registry, session selection, wallet-aware signing
+and transaction output, migration/recovery, and wallet/network-scoped stake
+metadata. This v0.3 work is not part of the published v0.2 image.
 
 Jupiter Borrow, collateral positions, arbitrary lending assets, leverage, liquidations, and arbitrary Jupiter transaction signing remain out of scope.
 
@@ -58,9 +63,9 @@ Read-only address, balance, token, validator, and stake-list commands use the pu
 
 ## Keystore format and recovery behavior
 
-`keystore.json` contains only version, kind, public address, Argon2id parameters/salt, AES-GCM nonce/tag, and ciphertext. The passphrase is never stored. AAD is a deterministic JSON representation of public metadata; changing the public address or KDF/cipher metadata makes GCM authentication fail.
+Each `wallets/<uuid>.json` contains only version, kind, public address, Argon2id parameters/salt, AES-GCM nonce/tag, and ciphertext. The passphrase is never stored. AAD is a deterministic JSON representation of public metadata; changing the public address or KDF/cipher metadata makes GCM authentication fail. `wallets.json` contains UUIDs, aliases, public addresses, timestamps, and the saved default, but no encrypted or plaintext key material. The root `keystore.json` is consulted only by explicit `wallet migrate <alias>`.
 
-Writes create a unique sibling temporary file with `wx`, write and `fsync` it, close it, set `0600`, then rename it into place. Existing keystores are refused rather than overwritten. Import validates the key before writing, validates a decrypt-and-derive round trip after writing, and removes only the newly created target if post-write validation fails.
+Keystore writes create a unique file with create-only permissions and publish it under a UUID using a hard link, so a preexisting key is never overwritten. Registry updates use a store lock and atomic replacement. Import verifies a decrypt-and-derive round trip before publication. If publication leaves a UUID keystore without registry metadata, recover it with `wallet recover <uuid> <alias>`; never delete it automatically. The full storage and selection contract is documented in [the implementation specification](../specs/multiple-wallets-implementation.md).
 
 The accepted key inputs are base58 32-byte seeds or 64-byte Solana expanded keypairs, plus JSON byte arrays from a Solana CLI keypair file. Mutable decoded key buffers are filled after use. JavaScript GC/CryptoKey lifetime limitations remain documented in the README.
 
@@ -88,13 +93,13 @@ npm run format:check
 
 The current offline suite covers exact decimal parsing, large bigint amounts, parser quoting and flags, command completion, history filtering, keystore round trips, wrong passwords, authenticated metadata tampering, atomic replacement refusal, file mode, absence of plaintext key fields, Stake Program sysvar account order, cluster/RPC session safety, exact USDC conversion, mainnet-only lending gating, and Jupiter instruction conversion. Docker E2E is kept separate because it requires Docker and a PTY; it must be run against `SOL_WALLET_E2E_IMAGE`, never against `tsx` or the source tree. The workflow fails before publication if the image reference, Docker, pexpect, or any E2E test is missing, and uploads a method log plus image metadata on E2E failure.
 
-The Solana `mainnet` naming update passed Prettier, Black, all 24 offline unit tests (including strict cluster-name validation), TypeScript lint/build, and `git diff --check`. Docker E2E was not run locally; GitHub Actions is the configured Docker test environment.
+The Solana `mainnet` naming update passed Prettier, Black, all 24 offline unit tests (including strict cluster-name validation), TypeScript lint/build, and `git diff --check`. At that time, Docker E2E was not run locally; GitHub Actions was the configured Docker test environment.
 
 Before committing, TypeScript/JSON/Markdown/YAML changes are formatted with Prettier `3.6.2`, and the Python E2E harness is formatted with Black `25.1.0`; the repository rule for this is recorded in `AGENTS.md`.
 
-In this workspace the image build completed, but the available Docker runtime exposed bind-mounted host directories as root-owned inside the container. That caused the secure non-root runtime to receive `EPERM` while enforcing the `0700` config directory. The PTY/mock-RPC tests are therefore intentionally left for the GitHub Actions runner, where the workflow builds and tests the exact image in its supported Docker environment.
+An earlier local Docker setup exposed bind-mounted host directories as root-owned inside the container, causing the secure non-root runtime to receive `EPERM` while enforcing the `0700` config directory. The host now has a working Docker daemon, and the full image E2E suite passed against the exact image built locally on 2026-09-26. The earlier runtime limitation is retained here as historical context, not as a current blocker.
 
-Do not claim a devnet/mainnet write was tested unless an opt-in integration or manual smoke run is recorded separately. Automated tests must use the disposable public fixture under `test/fixtures/` or a local/mock environment.
+Do not claim a devnet/mainnet write was tested unless an opt-in integration or manual smoke run is recorded separately. Automated tests must use the disposable public fixture under `test/fixtures/`, generate ephemeral test keys inside temporary directories, or use a local/mock environment. Never use a developer or production wallet in tests.
 
 ## Docker release contract
 
@@ -105,6 +110,24 @@ The intended CI order is formatting, source tests, `linux/amd64` image build, PT
 The post-review GitHub Actions run `35480368693` passed formatting, 18 unit tests, the TypeScript build, the exact-image Docker build, all 8 Docker E2E tests, GHCR authentication, and the exact tested-image push. The local container runtime cannot reproduce the runner's bind-mount ownership behavior, so this GitHub result is the authoritative Docker validation for this workspace.
 
 The post-review v0.2 GitHub Actions run `35482612396` passed dependency installation, formatting, 23 unit tests, the TypeScript build, the exact-image Docker build, all 9 Docker E2E tests, GHCR authentication, and the exact tested-image push. No live mainnet lending write was performed; the v0.2 unit and CI tests intentionally stop at deterministic instruction conversion, safety gates, and the existing mock-RPC transaction coverage.
+
+### v0.3 multiple-wallet implementation
+
+Local validation on 2026-09-26 passed Prettier formatting and checks, Black
+formatting and checks for the Python E2E tests, TypeScript lint/build, all 31
+unit tests, documentation link checks, and `git diff --check`. A direct local
+PTY smoke test imported the disposable fixture with a hidden passphrase, listed
+the wallet, emitted status JSON, and exited cleanly; its temporary configuration
+was removed afterward. The unit suite verifies current/default separation,
+rename stability, writer contention, UUID symlink rejection, refusal of piped
+passphrases, and an Ed25519 signature produced by the selected wallet's key.
+
+The `linux/amd64` Docker image built successfully, including its 31 unit tests
+and production TypeScript build. The exact-image Docker E2E suite then passed all
+13 tests locally. Coverage includes two-wallet import and selection, alias
+changes, a signed mock-RPC transaction, legacy migration, startup overrides,
+invalid wallet selection, piped-passphrase rejection, and shell completion.
+GitHub Actions will repeat these gates on the pushed commit before publishing.
 
 ## Known operational limits
 

@@ -10,7 +10,6 @@ import {
 } from "@solana/kit";
 import { z } from "zod";
 import { InvalidPrivateKeyError, KeystoreError } from "../errors/errors.js";
-import { keystoreFilePath } from "../config/config.js";
 
 /**
  * Local encrypted-key boundary.
@@ -28,24 +27,30 @@ export const KDF_DEFAULTS = {
   parallelism: 1,
 };
 
-const keystoreSchema = z.object({
-  version: z.literal(1),
-  kind: z.literal("solana-private-key"),
-  publicKey: z.string().min(32),
-  kdf: z.object({
-    name: z.literal("argon2id"),
-    memoryKiB: z.number().int().positive(),
-    iterations: z.number().int().positive(),
-    parallelism: z.number().int().positive(),
-    salt: z.string().min(1),
-  }),
-  cipher: z.object({
-    name: z.literal("aes-256-gcm"),
-    iv: z.string().min(1),
-    tag: z.string().min(1),
-  }),
-  ciphertext: z.string().min(1),
-});
+const keystoreSchema = z
+  .object({
+    version: z.literal(1),
+    kind: z.literal("solana-private-key"),
+    publicKey: z.string().min(32),
+    kdf: z
+      .object({
+        name: z.literal("argon2id"),
+        memoryKiB: z.number().int().positive(),
+        iterations: z.number().int().positive(),
+        parallelism: z.number().int().positive(),
+        salt: z.string().min(1),
+      })
+      .strict(),
+    cipher: z
+      .object({
+        name: z.literal("aes-256-gcm"),
+        iv: z.string().min(1),
+        tag: z.string().min(1),
+      })
+      .strict(),
+    ciphertext: z.string().min(1),
+  })
+  .strict();
 
 export type KeystoreFile = z.infer<typeof keystoreSchema>;
 
@@ -240,11 +245,12 @@ export async function decryptSecretKey(
   }
 }
 
-export async function readKeystore(
-  configDir: string,
+/** Read a specific encrypted wallet file, including UUID-named v0.3 files. */
+export async function readKeystoreFile(
+  filePath: string,
 ): Promise<KeystoreFile | null> {
   try {
-    const raw = await readFile(keystoreFilePath(configDir), "utf8");
+    const raw = await readFile(filePath, "utf8");
     const parsed = keystoreSchema.safeParse(JSON.parse(raw));
     if (!parsed.success)
       throw new KeystoreError("The keystore file is malformed.");
@@ -256,12 +262,12 @@ export async function readKeystore(
   }
 }
 
-export async function writeKeystoreAtomic(
-  configDir: string,
+/** Create an encrypted keystore at an exact target without replacing a file. */
+export async function writeKeystoreFileAtomic(
+  target: string,
   file: KeystoreFile,
 ): Promise<void> {
-  await mkdir(configDir, { recursive: true, mode: 0o700 });
-  const target = keystoreFilePath(configDir);
+  await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
   const temp = `${target}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
   let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
@@ -287,13 +293,10 @@ export async function writeKeystoreAtomic(
   }
 }
 
-export async function unlockAndValidate(
-  configDir: string,
+export async function unlockFileAndValidate(
+  file: KeystoreFile,
   passphrase: string,
 ): Promise<Buffer> {
-  const file = await readKeystore(configDir);
-  if (!file)
-    throw new KeystoreError("No wallet is imported. Run `wallet import`.");
   const secret = await decryptSecretKey(file, passphrase);
   try {
     const derivedAddress = await deriveAddress(secret);

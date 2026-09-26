@@ -1,7 +1,7 @@
 # Getting started for a Web3 beginner
 
 This guide assumes you have never used a blockchain wallet before. The short
-version is: `sol-wallet` stores one Solana private key in an encrypted local
+version is: `sol-wallet` stores each imported Solana private key in its own encrypted local
 file, uses a Solana RPC service to read the chain, and only signs a transaction
 after the command has validated and simulated it.
 
@@ -74,7 +74,7 @@ issue is recorded in [implementation.md](implementation.md). See
 Start the shell and type:
 
 ```text
-wallet import
+wallet import daily
 ```
 
 The program asks for a base58 Solana private key through a hidden prompt,
@@ -83,14 +83,14 @@ asks for a new keystore passphrase. A Solana CLI JSON keypair can be imported
 without pasting its private key into the terminal:
 
 ```text
-wallet import --keypair-file /path/to/id.json
+wallet import savings --keypair-file /path/to/id.json
 ```
 
 The input file is read but never modified or deleted. The passphrase is not
 stored anywhere. The resulting file is:
 
 ```text
-~/.config/sol-wallet/keystore.json
+~/.config/sol-wallet/wallets/<uuid>.json
 ```
 
 It contains encrypted key material and public metadata, not a plaintext key.
@@ -101,11 +101,17 @@ the wallet.
 After import, these commands do not unlock the keystore:
 
 ```text
+wallet list
+wallet info daily
+wallet use daily
+status
 address
-wallet info
 ```
 
 They read only the public address and keystore metadata.
+Read [Managing multiple wallets](multiple-wallets.md) for the difference between
+the current wallet and saved default, migration from an older single-wallet
+directory, backups, and recovery.
 
 ## 5. Understand the cluster before using funds
 
@@ -133,6 +139,10 @@ The prompt includes the current cluster. A command sent to devnet does not
 affect the same address on mainnet, even though the address text is identical.
 Do not assume that a devnet success proves a mainnet transaction is safe; it
 only proves that the code path worked against a different network.
+
+When you keep more than one key, the alias is the same across networks but the
+funds are not. Check both the wallet and network shown by `status` before a
+write. The [multiple-wallet guide](multiple-wallets.md) explains these choices.
 
 ## 6. Start with read-only commands
 

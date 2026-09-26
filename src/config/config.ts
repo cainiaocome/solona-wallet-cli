@@ -51,12 +51,34 @@ export function configFilePath(configDir: string): string {
   return path.join(configDir, "config.json");
 }
 
-export function keystoreFilePath(configDir: string): string {
+/** Legacy v0.2 source path; normal wallet operation never reads this file. */
+export function legacyKeystoreFilePath(configDir: string): string {
   return path.join(configDir, "keystore.json");
 }
 
-export function stakeRegistryPath(configDir: string): string {
-  return path.join(configDir, "stake-accounts.json");
+/** Resolve the UUID-named encrypted keystore without using a user alias as a path. */
+export function walletKeystorePath(configDir: string, id: string): string {
+  return path.join(configDir, "wallets", `${id}.json`);
+}
+
+export function walletRegistryPath(configDir: string): string {
+  return path.join(configDir, "wallets.json");
+}
+
+export function walletDirectoryPath(configDir: string): string {
+  return path.join(configDir, "wallets");
+}
+
+export function walletLockPath(configDir: string): string {
+  return path.join(configDir, ".wallet-store.lock");
+}
+
+export function scopedStakeRegistryPath(
+  configDir: string,
+  walletId: string,
+  cluster: Cluster,
+): string {
+  return path.join(configDir, "stake-accounts", walletId, `${cluster}.json`);
 }
 
 export function historyFilePath(configDir: string): string {

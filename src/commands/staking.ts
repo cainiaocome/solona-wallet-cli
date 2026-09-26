@@ -25,14 +25,16 @@ import {
 } from "@solana-program/stake";
 import {
   chmod,
+  open,
   mkdtemp,
+  lstat,
   readFile,
   rename,
   rm,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { stakeRegistryPath } from "../config/config.js";
+import { scopedStakeRegistryPath } from "../config/config.js";
 import {
   InsufficientBalanceError,
   SimulationError,
@@ -48,11 +50,16 @@ import { rpcRequest } from "../solana/rpc.js";
 import { findValidator, parseValidatorAddress } from "../solana/validators.js";
 import { parseAddress } from "../wallet/address.js";
 import { EncryptedKeystoreSigner } from "../wallet/signer.js";
-import { requireWallet } from "./read-only.js";
+import { requireSelectedWallet, requireWallet } from "./read-only.js";
 import { confirmSignature } from "./send.js";
 import type { CommandContext } from "./context.js";
 import { assertRpcCluster } from "../solana/rpc.js";
 import { getStakeActivation } from "../integrations/stake-activation.js";
+import {
+  assertScopedStakeDirectory,
+  ensureScopedStakeDirectory,
+  withStoreLock,
+} from "../wallet/store.js";
 
 /**
  * Native Stake Program commands.
@@ -94,12 +101,15 @@ export function insertReadonlyAccounts(
 interface StakeRegistryEntry {
   address: string;
   validatorVoteAccount: string;
-  createdSignature?: string;
+  createdSignature: string;
   createdAt: string;
 }
 
 interface StakeRegistry {
   version: 1;
+  walletId: string;
+  walletAddress: string;
+  cluster: "mainnet" | "devnet";
   accounts: StakeRegistryEntry[];
 }
 
@@ -145,11 +155,7 @@ export async function stakeCreate(
     "stake account rent lookup",
   );
   const rentReserve = BigInt(rentResponse as bigint);
-  const signer = new EncryptedKeystoreSigner(
-    context.config.configDir,
-    owner,
-    context.readPassphrase,
-  );
+  const signer = createStakeSigner(context, owner);
   const latest = await rpcRequest(
     rpc.getLatestBlockhash({ commitment: context.config.commitment }),
     "recent blockhash lookup",
@@ -404,11 +410,7 @@ export async function stakeDeactivate(
     throw new StakeAccountError(
       `Stake account is already ${info.state}; deactivation is epoch-based and cannot be repeated.`,
     );
-  const signer = new EncryptedKeystoreSigner(
-    context.config.configDir,
-    owner,
-    context.readPassphrase,
-  );
+  const signer = createStakeSigner(context, owner);
   await runStakeInstruction(
     context,
     command,
@@ -461,11 +463,7 @@ export async function stakeWithdraw(
     throw new StakeAccountError(
       "This withdrawal would leave a non-rent-exempt residual stake account.",
     );
-  const signer = new EncryptedKeystoreSigner(
-    context.config.configDir,
-    owner,
-    context.readPassphrase,
-  );
+  const signer = createStakeSigner(context, owner);
   await runStakeInstruction(
     context,
     command,
@@ -721,25 +719,62 @@ async function parseStakeAccount(
 }
 
 async function readRegistry(context: CommandContext): Promise<StakeRegistry> {
+  const selected = await requireSelectedWallet(context);
+  const target = scopedStakeRegistryPath(
+    context.config.configDir,
+    selected.identity.id,
+    context.config.cluster,
+  );
+  await assertScopedStakeDirectory(
+    context.config.configDir,
+    selected.identity.id,
+  );
   try {
+    const metadata = await lstat(target);
+    if (
+      !metadata.isFile() ||
+      metadata.isSymbolicLink() ||
+      (metadata.mode & 0o077) !== 0
+    )
+      throw new StakeAccountError(
+        "Stake registry must be a regular mode 0600 file.",
+      );
     const parsed = JSON.parse(
-      await readFile(stakeRegistryPath(context.config.configDir), "utf8"),
+      await readFile(target, "utf8"),
     ) as Partial<StakeRegistry>;
+    if (
+      parsed.version !== 1 ||
+      parsed.walletId !== selected.identity.id ||
+      parsed.walletAddress !== selected.identity.address ||
+      parsed.cluster !== context.config.cluster ||
+      !Array.isArray(parsed.accounts)
+    )
+      throw new Error("scope mismatch");
     return {
       version: 1,
-      accounts: Array.isArray(parsed.accounts)
+      walletId: selected.identity.id,
+      walletAddress: selected.identity.address,
+      cluster: context.config.cluster,
+      accounts: parsed.accounts
         ? parsed.accounts.filter(
             (entry) =>
               entry &&
               typeof entry.address === "string" &&
               typeof entry.validatorVoteAccount === "string" &&
+              typeof entry.createdSignature === "string" &&
               typeof entry.createdAt === "string",
           )
         : [],
     };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT")
-      return { version: 1, accounts: [] };
+      return {
+        version: 1,
+        walletId: selected.identity.id,
+        walletAddress: selected.identity.address,
+        cluster: context.config.cluster,
+        accounts: [],
+      };
     throw new StakeAccountError("Stake registry is malformed.");
   }
 }
@@ -748,25 +783,52 @@ async function addRegistryEntry(
   context: CommandContext,
   entry: StakeRegistryEntry,
 ): Promise<void> {
-  const registry = await readRegistry(context);
-  registry.accounts = [
-    ...registry.accounts.filter(
-      (existing) => existing.address !== entry.address,
-    ),
-    entry,
-  ];
-  const target = stakeRegistryPath(context.config.configDir);
-  const temporaryDirectory = await mkdtemp(
-    path.join(path.dirname(target), ".stake-registry-"),
+  const selected = await requireSelectedWallet(context);
+  const target = scopedStakeRegistryPath(
+    context.config.configDir,
+    selected.identity.id,
+    context.config.cluster,
   );
-  const temporaryPath = path.join(temporaryDirectory, "stake-accounts.json");
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(registry, null, 2)}\n`, {
-      mode: 0o600,
-    });
-    await chmod(temporaryPath, 0o600);
-    await rename(temporaryPath, target);
-  } finally {
-    await rm(temporaryDirectory, { recursive: true, force: true });
-  }
+  await withStoreLock(context.config.configDir, async () => {
+    const registry = await readRegistry(context);
+    registry.accounts = [
+      ...registry.accounts.filter(
+        (existing) => existing.address !== entry.address,
+      ),
+      entry,
+    ];
+    await ensureScopedStakeDirectory(
+      context.config.configDir,
+      selected.identity.id,
+    );
+    const temporaryDirectory = await mkdtemp(
+      path.join(path.dirname(target), ".stake-registry-"),
+    );
+    const temporaryPath = path.join(temporaryDirectory, "stake-accounts.json");
+    try {
+      await writeFile(temporaryPath, `${JSON.stringify(registry, null, 2)}\n`, {
+        mode: 0o600,
+      });
+      await chmod(temporaryPath, 0o600);
+      await rename(temporaryPath, target);
+      const directoryHandle = await open(path.dirname(target), "r");
+      try {
+        await directoryHandle.sync();
+      } finally {
+        await directoryHandle.close();
+      }
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+}
+
+function createStakeSigner(
+  context: CommandContext,
+  owner: ReturnType<typeof address>,
+): EncryptedKeystoreSigner {
+  const selected = context.commandWallet;
+  if (!selected || selected.identity.address !== owner)
+    throw new StakeAccountError("Stake signer wallet snapshot mismatch.");
+  return new EncryptedKeystoreSigner(selected, context.readPassphrase);
 }

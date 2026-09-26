@@ -1,15 +1,11 @@
 import { address, type Address } from "@solana/kit";
-import {
-  AppError,
-  InsufficientBalanceError,
-  RpcError,
-} from "../errors/errors.js";
 import { formatSol, formatUnits } from "../solana/amounts.js";
 import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import { getTokenAccounts } from "../solana/tokens.js";
 import { listValidators } from "../solana/validators.js";
-import { getWalletAddress } from "../wallet/signer.js";
 import { readHistory } from "../shell/history.js";
+import { resolveWallet, type SelectedWallet } from "../wallet/store.js";
+import { WalletStoreError } from "../errors/errors.js";
 import type { CommandContext } from "./context.js";
 
 /**
@@ -21,24 +17,28 @@ import type { CommandContext } from "./context.js";
  * run while inspecting a new machine or RPC endpoint.
  */
 export async function requireWallet(context: CommandContext): Promise<Address> {
-  const wallet = await getWalletAddress(context.config.configDir);
-  if (!wallet)
-    throw new AppError(
-      "No wallet is imported. Run `wallet import`.",
-      "KeystoreError",
-      1,
+  return (await requireSelectedWallet(context)).identity.address;
+}
+
+export async function requireSelectedWallet(
+  context: CommandContext,
+): Promise<SelectedWallet> {
+  if (context.commandWallet) return context.commandWallet;
+  if (context.walletStoreError) throw context.walletStoreError;
+  const id = context.session.currentWalletId;
+  if (!id)
+    throw new WalletStoreError(
+      "WalletNotSelected",
+      "No wallet is selected. Import one with `wallet import <alias>` or select one with `sol-wallet --wallet <alias>`.",
+      2,
     );
-  return address(wallet);
+  context.commandWallet = await resolveWallet(context.config.configDir, id);
+  return context.commandWallet;
 }
 
 export async function showAddress(context: CommandContext): Promise<void> {
-  const wallet = await getWalletAddress(context.config.configDir);
-  if (!wallet)
-    throw new AppError(
-      "No wallet is imported. Run `wallet import`.",
-      "KeystoreError",
-      1,
-    );
+  const selected = await requireSelectedWallet(context);
+  const wallet = selected.identity.address;
   context.output.print(
     { ok: true, address: wallet, cluster: context.config.cluster },
     `Address: ${wallet}\nCluster: ${context.config.cluster}`,
@@ -163,30 +163,31 @@ export async function showValidators(
 }
 
 export async function showConfig(context: CommandContext): Promise<void> {
+  const rpcUrl = safeDisplayRpcUrl(context.config.rpcUrl);
   context.output.print(
     {
       ok: true,
       cluster: context.config.cluster,
-      rpcUrl: context.config.rpcUrl,
+      rpcUrl,
       commitment: context.config.commitment,
       configDir: context.config.configDir,
     },
-    `Cluster: ${context.config.cluster}\nRPC URL: ${context.config.rpcUrl}\nCommitment: ${context.config.commitment}\nConfig directory: ${context.config.configDir}`,
+    `Cluster: ${context.config.cluster}\nRPC URL: ${rpcUrl}\nCommitment: ${context.config.commitment}\nConfig directory: ${context.config.configDir}`,
   );
 }
 
-export async function showWalletInfo(context: CommandContext): Promise<void> {
-  const file = await getWalletAddress(context.config.configDir);
-  if (!file)
-    throw new AppError(
-      "No wallet is imported. Run `wallet import`.",
-      "KeystoreError",
-      1,
-    );
-  context.output.print(
-    { ok: true, address: file, cluster: context.config.cluster },
-    `Address: ${file}\nCluster: ${context.config.cluster}\nPrivate key: encrypted at rest`,
-  );
+function safeDisplayRpcUrl(value: string): string {
+  try {
+    const parsed = new URL(value);
+    parsed.username = "";
+    parsed.password = "";
+    parsed.search = "";
+    parsed.hash = "";
+    if (parsed.pathname !== "/") return `${parsed.origin}/[REDACTED]`;
+    return parsed.origin;
+  } catch {
+    return "[REDACTED]";
+  }
 }
 
 export async function showHistory(context: CommandContext): Promise<void> {

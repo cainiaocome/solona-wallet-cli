@@ -1,8 +1,8 @@
 # Solana Wallet CLI
 
-`sol-wallet` is a small, Solana-only command-line wallet for personal use. It keeps one imported Solana private key encrypted locally, supports read-only SOL and SPL/Token-2022 queries, SOL/token transfers, native staking, transaction inspection, Jupiter Lend Earn USDC operations, and an interactive shell.
+`sol-wallet` is a small, Solana-only command-line wallet for personal use. It keeps multiple imported Solana private keys encrypted locally under named aliases, supports read-only SOL and SPL/Token-2022 queries, SOL/token transfers, native staking, transaction inspection, Jupiter Lend Earn USDC operations, and an interactive shell.
 
-The v0.2 release artifact is a `linux/amd64` Docker image. v0.2 Jupiter Lend support is limited to canonical mainnet USDC Earn deposits, withdrawals, and withdrawal of the maximum currently available for this wallet. Borrowing, seed phrases, multiple wallets, swaps, hardware wallets, dApps, and arbitrary transaction signing remain out of scope.
+The published v0.2 release artifact is a `linux/amd64` Docker image. This checkout adds the next phase's multiple-wallet support; it has not been published as a new image yet. Jupiter Lend remains limited to canonical mainnet USDC Earn deposits, withdrawals, and withdrawal of the maximum currently available for the selected wallet. Borrowing, seed phrases, swaps, hardware wallets, dApps, and arbitrary transaction signing remain out of scope.
 
 ## Release image
 
@@ -14,7 +14,7 @@ docker run --rm -it \
   ghcr.io/<owner>/sol-wallet:latest
 ```
 
-The image defaults to the non-root `solwallet` user (UID/GID `10001`). The direct example maps the caller's UID/GID so a host directory with mode `0700` remains writable; the wrapper does this automatically. The only persistent mount is the host directory above. It contains public configuration and metadata plus the encrypted `keystore.json`; the disposable container does not own the wallet state.
+The image defaults to the non-root `solwallet` user (UID/GID `10001`). The direct example maps the caller's UID/GID so a host directory with mode `0700` remains writable; the wrapper does this automatically. The only persistent mount is the host directory above. It contains public configuration and metadata plus one encrypted UUID-named keystore per wallet; the disposable container does not own the wallet state.
 
 The optional wrapper provides normal CLI-like usage:
 
@@ -57,7 +57,11 @@ The code was tested with these exact dependency versions in the current lockfile
 Start the shell and import a base58 key through a hidden prompt:
 
 ```text
-wallet import
+wallet import daily
+wallet list
+wallet use daily
+wallet default daily
+status
 address
 balance
 ```
@@ -65,7 +69,7 @@ balance
 A Solana CLI JSON keypair can be imported as an input file:
 
 ```text
-wallet import --keypair-file /path/to/id.json
+wallet import savings --keypair-file /path/to/id.json
 ```
 
 The keypair file is never modified or deleted. Private keys and keystore passwords are deliberately not accepted as CLI arguments or environment variables.
@@ -74,7 +78,7 @@ The keypair file is never modified or deleted. Private keys and keystore passwor
 
 ```text
 help
-wallet info
+wallet info daily
 address
 balance
 token list
@@ -112,10 +116,11 @@ Configuration precedence is CLI flag, environment/`.env`, `config.json`, then bu
 The default directory is `~/.config/sol-wallet`:
 
 ```text
-config.json          0600  non-secret session defaults
-keystore.json        0600  Argon2id + AES-256-GCM encrypted key
-stake-accounts.json  0600  public stake registry
-history              0600  filtered shell history
+config.json                    0600  non-secret network preferences
+wallets.json                   0600  aliases and saved default
+wallets/<uuid>.json            0600  one Argon2id/AES-GCM encrypted key
+stake-accounts/<uuid>/<net>.json 0600  wallet/network-scoped stake hints
+history                        0600  filtered shell history
 ```
 
 SOL and token amounts are parsed as strings into `bigint`; no monetary calculation uses floating point. JSON output represents integer monetary values as decimal strings.
@@ -136,4 +141,4 @@ npm test
 
 Opt-in Solana integration tests use `RUN_SOLANA_INTEGRATION=1` and must never use a real developer wallet. Docker E2E tests exercise the built image through a PTY and deterministic mock RPC; set `SOL_WALLET_E2E_IMAGE` to the image under test.
 
-Beginner-friendly documentation is indexed in [docs/README.md](docs/README.md). Start with [docs/getting-started.md](docs/getting-started.md), then read [docs/web3-concepts.md](docs/web3-concepts.md) and [docs/command-cookbook.md](docs/command-cookbook.md). The deeper references are [docs/architecture.md](docs/architecture.md), [docs/security-and-testing.md](docs/security-and-testing.md), [docs/implementation.md](docs/implementation.md), and [docs/jupiter-lend.md](docs/jupiter-lend.md).
+Beginner-friendly documentation is indexed in [docs/README.md](docs/README.md). Start with [docs/getting-started.md](docs/getting-started.md), then read [docs/web3-concepts.md](docs/web3-concepts.md), [docs/command-cookbook.md](docs/command-cookbook.md), and the [multiple-wallet guide](docs/multiple-wallets.md). The deeper references are [docs/architecture.md](docs/architecture.md), [docs/security-and-testing.md](docs/security-and-testing.md), [docs/implementation.md](docs/implementation.md), and [docs/jupiter-lend.md](docs/jupiter-lend.md).

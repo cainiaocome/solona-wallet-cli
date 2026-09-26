@@ -17,9 +17,11 @@ import { createCommandContext } from "./commands/context.js";
 import { executeLine } from "./commands/execute.js";
 import { runRepl } from "./shell/repl.js";
 import { stringifyJson } from "./output/json.js";
+import { selectWallet } from "./wallet/store.js";
 
 interface StartupOptions extends ConfigOverrides {
   command?: string;
+  wallet?: string;
   json: boolean;
   dryRun: boolean;
   yes: boolean;
@@ -37,11 +39,16 @@ function parseArgs(argv: string[]): StartupOptions {
     const arg = argv[index]!;
     const next = () => {
       const value = argv[++index];
-      if (!value) throw new ConfigError(`${arg} requires a value.`);
+      if (!value || value.startsWith("--"))
+        throw new ConfigError(`${arg} requires a value.`);
       return value;
     };
     if (arg === "-c" || arg === "--command") options.command = next();
-    else if (arg === "--cluster") {
+    else if (arg === "--wallet") {
+      if (options.wallet !== undefined)
+        throw new ConfigError("--wallet may be specified only once.");
+      options.wallet = next();
+    } else if (arg === "--cluster") {
       const value = clusterSchema.safeParse(next());
       if (!value.success)
         throw new ConfigError("--cluster must be mainnet or devnet.");
@@ -66,12 +73,37 @@ function parseArgs(argv: string[]): StartupOptions {
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   try {
     const options = parseArgs(argv);
+    if (options.json && options.command === undefined)
+      throw new ConfigError("--json requires a one-shot command with -c.");
     const config = await loadConfig(options);
+    let selected: Awaited<ReturnType<typeof selectWallet>> | undefined;
+    let walletStoreError;
+    try {
+      selected = await selectWallet(config, options.wallet);
+    } catch (error) {
+      if (options.wallet !== undefined) throw error;
+      const appError = asAppError(error);
+      walletStoreError = appError;
+      if (process.stdin.isTTY && !options.json)
+        process.stderr.write(`Wallet store: ${appError.message}\n`);
+    }
     const context = createCommandContext(
       config,
       { json: options.json, verbose: options.verbose },
-      { dryRun: options.dryRun, yes: options.yes, verbose: options.verbose },
+      {
+        dryRun: options.dryRun,
+        yes: options.yes,
+        verbose: options.verbose,
+        currentWalletId: selected?.wallet?.identity.id ?? null,
+        executionMode:
+          options.command !== undefined
+            ? "oneshot"
+            : process.stdin.isTTY
+              ? "interactive"
+              : "piped",
+      },
     );
+    context.walletStoreError = walletStoreError;
     if (options.command !== undefined) {
       await executeLine(context, options.command);
       return 0;

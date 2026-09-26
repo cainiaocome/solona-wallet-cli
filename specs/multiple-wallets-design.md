@@ -1,6 +1,6 @@
 # Multiple wallets: proposed v0.3 design
 
-Status: product direction accepted; runtime implementation has not started.
+Status: product direction accepted and implemented in this checkout.
 Read the [implementation specification](multiple-wallets-implementation.md) for
 exact schemas, edge cases, recovery rules, code changes, and acceptance tests.
 That document resolves implementation details left open in this overview.

@@ -1,5 +1,6 @@
 import readline from "node:readline";
 import { readSync } from "node:fs";
+import { AppError } from "../errors/errors.js";
 
 export interface PromptIO {
   input: NodeJS.ReadableStream & {
@@ -49,7 +50,12 @@ export async function readSecret(
 ): Promise<string> {
   const input = io.input;
   const output = io.output;
-  if (!input.isTTY || !input.setRawMode) return readLine(question, io);
+  if (!input.isTTY || !input.setRawMode)
+    throw new AppError(
+      "Private-key passphrases can only be entered in an interactive terminal.",
+      "PromptError",
+      2,
+    );
   output.write(question);
   return await new Promise<string>((resolve, reject) => {
     let value = "";

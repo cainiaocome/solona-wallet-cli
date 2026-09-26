@@ -1,85 +1,61 @@
-# Solana Wallet CLI implementation plan
-
-## Current handoff: v0.3 multiple-wallet specification
-
-- Goal: prepare an implementation-ready handoff for the approved multiple-wallet
-  direction. Runtime implementation has not started.
-- Complete: product design in `specs/multiple-wallets-design.md`; detailed
-  contracts, schemas, storage recovery, file map, and acceptance scenarios in
-  `specs/multiple-wallets-implementation.md`.
-- Required layout: one encrypted keystore per wallet in `wallets/<uuid>.json`,
-  separate alias/default registry, session selection independent of saved default.
-- Next coding session: read both specifications and repository state, then replace
-  this historical plan with the implementation milestones and actual progress.
-- This documentation task changes no application behavior. Validation is limited
-  to documentation formatting, local links, and diff checks; runtime and Docker
-  tests are not claimed for the proposed functionality.
-- Existing uncommitted specification relocation and formatter-glob changes are
-  retained. No commit or push has been requested for this handoff.
-
-The remainder records historical v0.2 work, not current validation results.
+# Implementation plan
 
 ## Goal
 
-Implement the v0.2 Solana-only wallet described in `specs/spec.md`, preserving the completed v0.1 wallet and adding the narrowly-scoped mainnet USDC Jupiter Lend Earn integration with tests, documentation, and CI validation.
+Implement multiple named wallets from `specs/multiple-wallets-design.md` and
+`specs/multiple-wallets-implementation.md`, while preserving existing command
+and signing safety.
 
 ## Current state
 
-- TypeScript/ESM application, lockfile, tests, Docker packaging, wrapper, workflow, and operational documentation are implemented.
-- v0.1 is complete and published through the verified Docker/GHCR workflow.
-- v0.2 Jupiter Lend adapter, commands, unit coverage, and documentation are implemented and published.
-- Beginner documentation, command examples, architecture notes, security guidance, and source-level explanatory comments are now maintained under `docs/` and the main Web3 boundaries in `src/`.
-- Source formatting, build, and offline unit tests pass.
-- The local Docker image build passed its in-image test/build/prune stages before the review fixes.
-- The Docker PTY/mock-RPC E2E is now a hard gate with PTY wallet import, signer unlock, completion, JSON config, and failure artifacts; it must be rerun by GitHub Actions because this workspace has no usable Docker daemon/bind-mount runtime.
+- [complete] Product and implementation specifications reviewed.
+- [complete] UUID keystores, strict alias registry, atomic writes, writer lock,
+  duplicate checks, interrupted-import recovery and mode/symlink checks.
+- [complete] Explicit legacy migration and recovery by UUID, keeping the legacy
+  encrypted file as a recovery copy.
+- [complete] Startup default/`--wallet`, session-local `wallet use`, saved
+  `wallet default`, aliases, info/list/rename, status, prompt, help, and completion.
+- [complete] Captured wallet identity is passed to SOL, token, staking, and
+  Jupiter signers; outputs and previews identify the selected wallet.
+- [complete] Stake hints are isolated by wallet/network; caches clear on wallet,
+  cluster, RPC, and commitment changes.
+- [complete] Beginner, backup, migration, recovery, security, source, and command
+  documentation updated.
+- [complete] Local implementation, documentation, source comments, and unit
+  acceptance coverage.
+- [complete] Docker image build and all 13 image-based E2E acceptance tests
+  passed locally on 2026-09-26.
+- [in progress] Final review, commit, push, and verification of the resulting
+  GitHub Actions run.
 
-## Milestones
+## Constraints
 
-- [complete] Scaffold TypeScript project, parser, shell, configuration, output, and error model.
-- [complete] Implement encrypted keystore and signer boundary.
-- [complete] Implement read-only RPC commands.
-- [complete] Implement SOL/token transaction pipeline.
-- [complete] Implement native staking commands.
-- [complete] Add Docker image, wrapper, mock RPC, E2E tests, and CI.
-- [complete] Run the post-review GitHub workflow and inspect its Docker E2E and publish result.
-- [complete] Verify the current stable Jupiter Lend SDK APIs and isolate legacy web3 types at the adapter boundary.
-- [complete] Implement mainnet canonical-USDC `jupiter-lend status`, `deposit`, `withdraw`, and `withdraw --all`.
-- [complete] Add v0.2 unit tests and operational/dependency-risk documentation.
-- [complete] Run v0.2 full validation and GitHub Docker workflow.
-- [complete] Expand beginner documentation and annotate the Web3/security boundaries in source code.
-- [complete] Update the production cluster label/default RPC to Solana's current `mainnet` naming and validate code/tests/docs.
+- One encrypted keystore per wallet: `wallets/<uuid>.json`; aliases/default live
+  in `wallets.json` and never form paths.
+- The saved default affects new processes only; `wallet use` is session-local.
+- Existing root `keystore.json` is read only by explicit migration.
+- No wallet deletion, generation, watch-only support, secret cache, or deferred
+  protocol scope.
+- Keep the existing feature scope limited to the two wallet specifications;
+  do not add deferred wallet-management or protocol features.
 
-## Decisions / constraints
+## Validation log
 
-- Use stable `@solana/kit` and official generated Solana program packages; do not use `@solana/web3.js` in core code.
-- Keep private-key and passphrase input out of CLI arguments and environment variables.
-- Keep Jupiter Borrow, arbitrary lending assets, leverage, and arbitrary serialized Jupiter signing out of v0.2.
-- Canonical USDC is `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`; do not make the first integration an arbitrary-mint feature.
-- Keep legacy Jupiter types inside `src/integrations/jupiter-lend/` and the legacy stake-activation RPC helper inside `src/integrations/stake-activation.ts`; the wallet's core transaction pipeline remains on Kit.
-- Preserve the supplied `specs/spec.md`; update user-facing documentation as implementation lands.
-
-## Validation
-
-- `npm run format:check`: passing with Prettier 3.6.2.
-- `python3 -m black --check test/e2e`: passing with Black 25.1.0.
-- `npm test`: 23 offline unit tests passing across five files.
-- `npm run build`: passing.
-- `npm run lint`: passing.
-- `npm ci --dry-run --legacy-peer-deps`: passing.
-- `npm audit --omit=dev`: reports upstream transitive advisories in the pinned Jupiter SDK graph; documented in `docs/jupiter-lend.md` and not auto-upgraded.
-- `docker build --platform linux/amd64 -t sol-wallet:e2e .`: passing, including in-image tests/build and production dependency pruning.
-- Direct source TTY smoke test: shell boot, help, and clean exit passing.
-- Direct deterministic mock-RPC test: SOL dry-run and signed confirmation path passing.
-- Direct non-TTY shell smoke test: piped `help`/`exit` exits 0; unknown flags exit 2.
-- Deterministic mock-RPC smoke test: JSON SOL dry-run parses as one object and confirms no passphrase/output leakage.
-- v0.2 command smoke tests: help/completion expose `jupiter-lend`; devnet lending is rejected before wallet/network use after the mainnet guard.
-- Docker E2E: post-review GitHub Actions run 35482612396 passed all 9 image tests and published the exact tested image; Docker remains unavailable in this workspace.
-- Documentation-only follow-up validation passes: Prettier, Black, 23 unit tests, TypeScript lint, build, and `git diff --check`.
-- Image publication now includes branch, bare short-commit, and legacy `latest` tags; the wrapper defaults to the repository's `master` image tag.
-- npm dependency installation now enforces the seven-day `min-release-age` policy in local installs, GitHub Actions, and Docker builds.
-- Supply-chain validation passes locally with the shell override removed: project npm config reports `7`, and `npm ci --dry-run --legacy-peer-deps` succeeds. The changed Docker install path must be validated by the next GitHub Actions run because no usable local Docker daemon is available.
-- Current review fixes are implemented: network reads and writes verify RPC genesis identity; keystore create-only writes are atomic; shell history detects raw key encodings; malformed boolean/value flags are rejected; confirmation checks status before expiry and includes signatures in errors; stake activation and lockup checks use RPC state; JSON preflight goes to stderr; npm age-policy documentation distinguishes resolution from lockfile reproduction. Formatting, Black, TypeScript lint/build, shell syntax, and diff checks pass. Unit and Docker E2E suites were not run in this pass.
-- The host wrapper now pulls its selected image tag before each invocation and stops on pull failure rather than silently using stale cached content.
-- Bare command groups display their usage and available subcommands instead of producing a self-referential unknown-command suggestion.
-- The user-facing Jupiter integration command is named `jupiter-lend`, reserving `lend` for possible future multi-protocol routing.
-- Solana production cluster naming now uses only `mainnet` and `https://api.mainnet.solana.com`. Validation: formatting, 24 unit tests, TypeScript lint/build, Black, and diff checks passed. Docker E2E remains assigned to GitHub Actions.
+- Initial repository was clean at `48f6064` before implementation.
+- `npm run format`, `npm run format:check`, `python3 -m black test/e2e`, and
+  `python3 -m black --check test/e2e`: pass after the final code and
+  documentation formatting pass.
+- `npm test`: 31 tests pass, including UUID registry behavior, separate current
+  and default choices, wallet rename, writer contention, symlink rejection, and
+  Ed25519 verification of the selected wallet's transaction signature.
+- `npm run lint`, `npm run build`, and `git diff --check`: pass after final code
+  changes.
+- Direct local PTY smoke test: passed import with hidden TTY passphrase, list,
+  status JSON, clean exit, UUID file creation, and no passphrase echo.
+- `docker build --platform linux/amd64 -t sol-wallet:e2e .`: pass. The build
+  includes all 31 unit tests and the TypeScript production build.
+- `SOL_WALLET_E2E_IMAGE=sol-wallet:e2e python3 test/e2e/run_tests.py`: all 13
+  image-based E2E tests pass locally, including wallet import/selection,
+  transaction signing through mock RPC, migration, TTY safeguards, and shell
+  completion.
+- GitHub Actions for the requested push: pending until pushed and checked.

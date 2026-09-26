@@ -31,6 +31,17 @@ export class KeystoreError extends AppError {
   }
 }
 
+export class WalletStoreError extends AppError {
+  constructor(
+    code: string,
+    message: string,
+    exitCode: ExitCode = 1,
+    details?: unknown,
+  ) {
+    super(message, code, exitCode, details);
+  }
+}
+
 export class InvalidPrivateKeyError extends AppError {
   constructor(
     message = "The supplied private key is invalid.",

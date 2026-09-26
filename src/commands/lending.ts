@@ -28,7 +28,7 @@ import {
 } from "../integrations/jupiter-lend/adapter.js";
 import { confirmSignature } from "./send.js";
 import type { CommandContext } from "./context.js";
-import { requireWallet } from "./read-only.js";
+import { requireSelectedWallet, requireWallet } from "./read-only.js";
 import {
   formatSol,
   formatUnits,
@@ -319,11 +319,10 @@ function createLendSigner(
   context: CommandContext,
   owner: ReturnType<typeof address>,
 ): EncryptedKeystoreSigner {
-  return new EncryptedKeystoreSigner(
-    context.config.configDir,
-    owner,
-    context.readPassphrase,
-  );
+  const selected = context.commandWallet;
+  if (!selected || selected.identity.address !== owner)
+    throw new Error("Jupiter signer wallet snapshot mismatch.");
+  return new EncryptedKeystoreSigner(selected, context.readPassphrase);
 }
 
 export function parseUsdcAmount(value: string): bigint {

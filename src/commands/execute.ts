@@ -3,19 +3,27 @@ import { setSessionCluster } from "../config/config.js";
 import { AppError } from "../errors/errors.js";
 import { formatSol } from "../solana/amounts.js";
 import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
-import { completeLine } from "../shell/completion.js";
 import {
   flagValue,
   hasFlag,
   parseCommand,
   rejectExtraArgs,
-  requireArgs,
   type ParsedCommand,
 } from "../shell/parser.js";
 import { helpText } from "../shell/help.js";
 import { readHistory } from "../shell/history.js";
 import { Output } from "../output/output.js";
 import { importWallet } from "./wallet-import.js";
+import { migrateWallet, recoverWallet } from "./wallet-import.js";
+import {
+  status as showStatus,
+  walletDefault,
+  walletInfo,
+  walletList,
+  walletRename,
+  walletUse,
+} from "./wallet-management.js";
+import { resolveWallet } from "../wallet/store.js";
 import type { CommandContext } from "./context.js";
 import {
   showAddress,
@@ -25,7 +33,6 @@ import {
   showTokenBalance,
   showTokenList,
   showValidators,
-  showWalletInfo,
 } from "./read-only.js";
 import { sendSol } from "./send.js";
 import { sendToken } from "./token-send.js";
@@ -63,6 +70,7 @@ const TOP_LEVEL = [
   "set",
   "show",
   "history",
+  "status",
   "clear",
   "exit",
   "quit",
@@ -81,12 +89,28 @@ export async function executeParsed(
 ): Promise<ExecutionResult> {
   validateFlags(command);
   const previousOutput = context.output;
-  context.output = new Output({
-    json: previousOutput.json || hasFlag(command, "json"),
-    verbose: previousOutput.verbose,
-  });
+  const previousWallet = context.commandWallet;
+  context.output = new Output(
+    {
+      json: previousOutput.json || hasFlag(command, "json"),
+      verbose: previousOutput.verbose,
+    },
+    () => context.commandWallet?.identity,
+    () => context.config.cluster,
+  );
   try {
     const name = command.name.toLowerCase();
+    if (needsCurrentWallet(name, command.args[0])) {
+      if (context.walletStoreError) throw context.walletStoreError;
+      const id = context.session.currentWalletId;
+      if (!id)
+        throw new AppError(
+          "No wallet is selected. Import one with `wallet import <alias>` or select one with `sol-wallet --wallet <alias>`.",
+          "WalletNotSelected",
+          2,
+        );
+      context.commandWallet = await resolveWallet(context.config.configDir, id);
+    }
     if (name === "q") return { exit: true };
     if (name === "cls") {
       if (context.output.json)
@@ -116,14 +140,7 @@ export async function executeParsed(
           displayTopicHelp(context, "wallet");
           return { exit: false };
         }
-        requireArgs(
-          command,
-          1,
-          "wallet import [--keypair-file <path>] | wallet info",
-        );
-        if (command.args[0] === "import") await importWallet(context, command);
-        else if (command.args[0] === "info") await showWalletInfo(context);
-        else throw unknownCommand(`${command.name} ${command.args[0]}`);
+        await executeWallet(context, command);
         return { exit: false };
       case "send":
         rejectExtraArgs(
@@ -168,6 +185,10 @@ export async function executeParsed(
         rejectExtraArgs(command, 0, "history");
         await showHistory(context);
         return { exit: false };
+      case "status":
+        rejectExtraArgs(command, 0, "status");
+        await showStatus(context);
+        return { exit: false };
       case "clear":
         rejectExtraArgs(command, 0, "clear");
         if (context.output.json)
@@ -189,6 +210,87 @@ export async function executeParsed(
     }
   } finally {
     context.output = previousOutput;
+    context.commandWallet = previousWallet;
+  }
+}
+
+function needsCurrentWallet(name: string, subcommand?: string): boolean {
+  if (["address", "balance", "send"].includes(name)) return true;
+  if (name === "token")
+    return ["list", "balance", "send"].includes(subcommand ?? "");
+  if (name === "stake")
+    return ["create", "list", "deactivate", "withdraw"].includes(
+      subcommand ?? "",
+    );
+  if (name === "jupiter-lend")
+    return ["status", "deposit", "withdraw"].includes(subcommand ?? "");
+  return false;
+}
+
+async function executeWallet(
+  context: CommandContext,
+  command: ParsedCommand,
+): Promise<void> {
+  const [subcommand, ...args] = command.args;
+  const usage =
+    "wallet import <alias> [--keypair-file <path>] | wallet list | wallet info [<alias>] | wallet use <alias> | wallet default <alias> | wallet rename <old> <new> | wallet migrate <alias> | wallet recover <uuid> <alias>";
+  if (!subcommand) {
+    displayTopicHelp(context, "wallet");
+    return;
+  }
+  if (subcommand === "import") {
+    if (args.length !== 1)
+      throw new AppError(`Usage: ${usage}`, "ParseError", 2);
+    await importWallet(context, args[0]!, flagValue(command, "keypair-file"));
+    return;
+  }
+  if (flagValue(command, "keypair-file") !== undefined)
+    throw new AppError(
+      "--keypair-file is only valid for wallet import.",
+      "ParseError",
+      2,
+    );
+  if (command.flags.size > (hasFlag(command, "json") ? 1 : 0))
+    throw new AppError("Unknown wallet command flag.", "ParseError", 2);
+  if (subcommand === "list") {
+    if (args.length) throw new AppError("Usage: wallet list", "ParseError", 2);
+    await walletList(context);
+  } else if (subcommand === "info") {
+    if (args.length > 1)
+      throw new AppError("Usage: wallet info [<alias>]", "ParseError", 2);
+    await walletInfo(context, args[0]);
+  } else if (
+    subcommand === "use" ||
+    subcommand === "default" ||
+    subcommand === "migrate"
+  ) {
+    if (args.length !== 1)
+      throw new AppError(
+        `Usage: wallet ${subcommand} <alias>`,
+        "ParseError",
+        2,
+      );
+    if (subcommand === "use") await walletUse(context, args[0]!);
+    else if (subcommand === "default") await walletDefault(context, args[0]!);
+    else {
+      await migrateWallet(context, args[0]!);
+      context.walletStoreError = undefined;
+    }
+  } else if (subcommand === "rename") {
+    if (args.length !== 2)
+      throw new AppError("Usage: wallet rename <old> <new>", "ParseError", 2);
+    await walletRename(context, args[0]!, args[1]!);
+  } else if (subcommand === "recover") {
+    if (args.length !== 2)
+      throw new AppError(
+        "Usage: wallet recover <uuid> <alias>",
+        "ParseError",
+        2,
+      );
+    await recoverWallet(context, args[0]!, args[1]!);
+    context.walletStoreError = undefined;
+  } else {
+    throw unknownCommand(`wallet ${subcommand}`);
   }
 }
 
@@ -285,6 +387,9 @@ async function executeSet(
   const value = command.args[1]!;
   if (field === "cluster" && (value === "mainnet" || value === "devnet")) {
     setSessionCluster(context.config, value);
+    context.completion.tokenMints = [];
+    context.completion.stakeAccounts = [];
+    context.completion.recentValidators = [];
     context.output.print(
       { ok: true, cluster: value, rpcUrl: context.config.rpcUrl },
       `CLUSTER CHANGED TO ${value.toUpperCase()} (session only)\nRPC URL: ${context.config.rpcUrl}`,
@@ -298,6 +403,9 @@ async function executeSet(
       throw new AppError("RPC URL must use http or https.", "ConfigError", 2);
     }
     context.config.rpcUrl = value;
+    context.completion.tokenMints = [];
+    context.completion.stakeAccounts = [];
+    context.completion.recentValidators = [];
     context.output.print(
       { ok: true, rpcUrl: value },
       `RPC URL changed for this session: ${value}`,
@@ -307,6 +415,9 @@ async function executeSet(
     ["processed", "confirmed", "finalized"].includes(value)
   ) {
     context.config.commitment = value as typeof context.config.commitment;
+    context.completion.tokenMints = [];
+    context.completion.stakeAccounts = [];
+    context.completion.recentValidators = [];
     context.output.print(
       { ok: true, commitment: value },
       `Commitment changed for this session: ${value}`,

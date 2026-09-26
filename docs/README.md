@@ -10,12 +10,14 @@ read the documents in this order:
    and lending.
 3. [Command cookbook](command-cookbook.md) — practical examples, what each
    command changes, and how to automate JSON output.
-4. [Architecture](architecture.md) — how a command travels through the source
+4. [Multiple wallets](multiple-wallets.md) — aliases, current/default selection,
+   migration, backups, and recovery.
+5. [Architecture](architecture.md) — how a command travels through the source
    code and where to look when learning or changing the project.
-5. [Security and testing](security-and-testing.md) — what the wallet protects,
+6. [Security and testing](security-and-testing.md) — what the wallet protects,
    what it cannot protect, how to test without real funds, and how CI validates
    the Docker image.
-6. [Supply-chain controls](supply-chain.md) — how the lockfile, release-age
+7. [Supply-chain controls](supply-chain.md) — how the lockfile, release-age
    policy, CI, Docker build, and dependency updates work together.
 
 The more focused reference documents are also useful:
@@ -24,14 +26,13 @@ The more focused reference documents are also useful:
   decisions, dependency-install incident, release workflow, and known limits.
 - [Jupiter Lend Earn](jupiter-lend.md) documents the deliberately narrow v0.2
   mainnet USDC integration.
-- [Original specification](../specs/spec.md) is the product specification that guided
-  the implementation. It is preserved as a reference rather than a tutorial.
-- [Multiple-wallet design](../specs/multiple-wallets-design.md) proposes the next
-  phase. Product specifications and design proposals live in `specs/`, separate
-  from the user and operational documentation in `docs/`.
+- [Original specification](../specs/spec.md) records the initial product
+  requirements and is preserved as a historical reference.
+- [Multiple-wallet product design](../specs/multiple-wallets-design.md) records
+  the approved direction; product specifications live in `specs/`.
 - [Multiple-wallet implementation specification](../specs/multiple-wallets-implementation.md)
-  defines the next phase's schemas, recovery behavior, command contracts, and
-  acceptance tests. These features are specified but not yet implemented.
+  records the schemas, recovery behavior, command contracts, and acceptance
+  tests used to implement the multi-wallet feature.
 
 ## How to read the source
 
@@ -40,6 +41,7 @@ Start with `src/cli.ts`, then follow this path:
 ```text
 src/cli.ts
   -> src/config/config.ts
+  -> src/wallet/store.ts
   -> src/commands/context.ts
   -> src/shell/repl.ts or src/commands/execute.ts
   -> src/commands/<feature>.ts

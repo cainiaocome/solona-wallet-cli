@@ -5,7 +5,7 @@ import type { CommandContext } from "../commands/context.js";
 import { completeLine } from "./completion.js";
 import { appendHistory, readHistory } from "./history.js";
 import { shortenAddress } from "../output/human.js";
-import { getWalletAddress } from "../wallet/signer.js";
+import { readRegistry, resolveWallet } from "../wallet/store.js";
 
 /**
  * Interactive shell and piped-command runner.
@@ -14,14 +14,49 @@ import { getWalletAddress } from "../wallet/signer.js";
  * or confirmation. This avoids two readers competing for the same terminal.
  */
 export async function runRepl(context: CommandContext): Promise<number> {
-  process.stdout.write("Solana Wallet CLI\n");
-  process.stdout.write("Type `help` for commands.\n\n");
-
   if (!process.stdin.isTTY) return runPiped(context);
+
+  if (!context.output.json) {
+    process.stdout.write("Solana Wallet CLI\n");
+    try {
+      const selected = context.session.currentWalletId
+        ? await resolveWallet(
+            context.config.configDir,
+            context.session.currentWalletId,
+          )
+        : null;
+      const registry = await readRegistry(context.config.configDir);
+      const defaultWallet = registry.wallets.find(
+        (wallet) => wallet.id === registry.defaultWalletId,
+      );
+      process.stdout.write(
+        `Wallet: ${selected ? `${selected.identity.alias} (${shortenAddress(selected.identity.address)})` : "none selected"}\n`,
+      );
+      if (defaultWallet && defaultWallet.id !== selected?.identity.id)
+        process.stdout.write(
+          `Default wallet: ${defaultWallet.alias} (${shortenAddress(defaultWallet.address)})\n`,
+        );
+    } catch {
+      process.stdout.write(
+        "Wallet: wallet store needs attention; use wallet migrate/recover or read docs/multiple-wallets.md\n",
+      );
+    }
+    process.stdout.write(
+      `Network: ${context.config.cluster}\nType \`help\` for commands.\n\n`,
+    );
+  }
 
   let history = await readHistory(context.config.configDir);
   while (true) {
     const prompt = await shellPrompt(context);
+    try {
+      const registry = await readRegistry(context.config.configDir);
+      context.completion.walletAliases = registry.wallets.map(
+        (wallet) => wallet.alias,
+      );
+    } catch {
+      context.completion.walletAliases = [];
+    }
     const rl = createInterface(context, history);
     rl.setPrompt(prompt);
     const line = await readInput(rl);
@@ -118,7 +153,19 @@ function readInput(rl: readline.Interface): Promise<string | null> {
 }
 
 async function shellPrompt(context: CommandContext): Promise<string> {
-  const wallet = await getWalletAddress(context.config.configDir);
-  const identity = wallet ? ` ${shortenAddress(wallet)}` : " no-wallet";
-  return `sol-wallet [${context.config.cluster}${identity}]> `;
+  if (context.walletStoreError)
+    return `sol-wallet [${context.config.cluster} | wallet-error]> `;
+  try {
+    const selected = context.session.currentWalletId
+      ? await resolveWallet(
+          context.config.configDir,
+          context.session.currentWalletId,
+        )
+      : null;
+    if (!selected)
+      return `sol-wallet [${context.config.cluster} | no-wallet]> `;
+    return `sol-wallet [${context.config.cluster} | ${selected.identity.alias} | ${shortenAddress(selected.identity.address)}]> `;
+  } catch {
+    return `sol-wallet [${context.config.cluster} | wallet-error]> `;
+  }
 }

@@ -1,6 +1,7 @@
 # Multiple-wallet implementation specification (v0.3)
 
-Status: implementation handoff; runtime implementation has not started.
+Status: implementation contract used for v0.3 work; see root `PLAN.md` and
+current code/tests for implementation and validation state.
 Read [the product design](multiple-wallets-design.md) first. This document resolves
 its implementation choices. For v0.3 wallet behavior, this document takes
 precedence over the older single-wallet requirements in [spec.md](spec.md).

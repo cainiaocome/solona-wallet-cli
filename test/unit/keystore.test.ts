@@ -10,8 +10,8 @@ import {
   encryptSecretKey,
   normalizeSecretKey,
   readKeypairFile,
-  readKeystore,
-  writeKeystoreAtomic,
+  readKeystoreFile,
+  writeKeystoreFileAtomic,
 } from "../../src/wallet/keystore.js";
 
 describe("encrypted keystore", () => {
@@ -29,8 +29,9 @@ describe("encrypted keystore", () => {
         publicKey,
         "unit-test-passphrase",
       );
-      await writeKeystoreAtomic(directory, file);
-      const stored = await readKeystore(directory);
+      const keystorePath = path.join(directory, "wallet.json");
+      await writeKeystoreFileAtomic(keystorePath, file);
+      const stored = await readKeystoreFile(keystorePath);
       expect(stored?.publicKey).toBe(publicKey);
       expect(stored?.ciphertext).not.toContain("unit-test-passphrase");
       const decrypted = await decryptSecretKey(stored!, "unit-test-passphrase");
@@ -67,14 +68,15 @@ describe("encrypted keystore", () => {
           "unit-test-passphrase",
         ),
       ).rejects.toThrow(/unlock/);
+      expect((await stat(keystorePath)).mode & 0o777).toBe(0o600);
       expect(
-        (await stat(path.join(directory, "keystore.json"))).mode & 0o777,
-      ).toBe(0o600);
-      expect(
-        JSON.parse(
-          await readFile(path.join(directory, "keystore.json"), "utf8"),
-        ).privateKey,
+        JSON.parse(await readFile(keystorePath, "utf8")).privateKey,
       ).toBeUndefined();
+      await writeFile(
+        keystorePath,
+        JSON.stringify({ ...stored, privateKey: bs58.encode(secret) }),
+      );
+      await expect(readKeystoreFile(keystorePath)).rejects.toThrow(/malformed/);
       secret.fill(0);
     } finally {
       await rm(directory, { recursive: true, force: true });
@@ -121,8 +123,9 @@ describe("encrypted keystore", () => {
         await deriveAddress(secret),
         "passphrase",
       );
-      await writeKeystoreAtomic(directory, file);
-      await expect(writeKeystoreAtomic(directory, file)).rejects.toThrow(
+      const keystorePath = path.join(directory, "wallet.json");
+      await writeKeystoreFileAtomic(keystorePath, file);
+      await expect(writeKeystoreFileAtomic(keystorePath, file)).rejects.toThrow(
         /already exists/,
       );
       secret.fill(0);

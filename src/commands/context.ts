@@ -3,6 +3,8 @@ import { createClient, type SolanaClient } from "../solana/client.js";
 import { Output, type OutputOptions } from "../output/output.js";
 import type { CompletionCache } from "../shell/completion.js";
 import { readSecret } from "../shell/prompt.js";
+import type { SelectedWallet } from "../wallet/store.js";
+import type { AppError } from "../errors/errors.js";
 
 /**
  * Dependencies and session state shared by every command handler.
@@ -15,7 +17,15 @@ export interface CommandContext {
   config: AppConfig;
   output: Output;
   completion: CompletionCache;
-  session: { dryRun: boolean; yes: boolean; verbose: boolean };
+  session: {
+    dryRun: boolean;
+    yes: boolean;
+    verbose: boolean;
+    currentWalletId: string | null;
+    executionMode: "interactive" | "piped" | "oneshot";
+  };
+  commandWallet?: SelectedWallet;
+  walletStoreError?: AppError;
   getClient(): SolanaClient;
   readPassphrase(): Promise<string>;
 }
@@ -23,14 +33,37 @@ export interface CommandContext {
 export function createCommandContext(
   config: AppConfig,
   outputOptions: OutputOptions,
-  session = { dryRun: false, yes: false, verbose: outputOptions.verbose },
+  session: Partial<CommandContext["session"]> = {},
 ): CommandContext {
-  return {
+  let context!: CommandContext;
+  context = {
     config,
-    output: new Output(outputOptions),
-    completion: { tokenMints: [], stakeAccounts: [], recentValidators: [] },
-    session,
+    output: new Output(
+      outputOptions,
+      () => context.commandWallet?.identity,
+      () => config.cluster,
+    ),
+    completion: {
+      tokenMints: [],
+      stakeAccounts: [],
+      recentValidators: [],
+      walletAliases: [],
+    },
+    session: {
+      dryRun: session.dryRun ?? false,
+      yes: session.yes ?? false,
+      verbose: session.verbose ?? outputOptions.verbose,
+      currentWalletId: session.currentWalletId ?? null,
+      executionMode: session.executionMode ?? "interactive",
+    },
     getClient: () => createClient(config),
-    readPassphrase: () => readSecret("Keystore passphrase: "),
+    readPassphrase: () => {
+      const selected = context.commandWallet?.identity;
+      const label = selected
+        ? `${selected.alias} (${String(selected.address).slice(0, 4)}…${String(selected.address).slice(-4)})`
+        : "wallet";
+      return readSecret(`Passphrase for ${label}: `);
+    },
   };
+  return context;
 }

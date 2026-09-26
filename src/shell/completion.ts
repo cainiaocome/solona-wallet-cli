@@ -4,6 +4,7 @@ export interface CompletionCache {
   tokenMints: string[];
   stakeAccounts: string[];
   recentValidators: string[];
+  walletAliases: string[];
 }
 
 const topLevel = [
@@ -20,12 +21,22 @@ const topLevel = [
   "set",
   "show",
   "history",
+  "status",
   "clear",
   "exit",
   "quit",
 ];
 const nested: Record<string, string[]> = {
-  wallet: ["import", "info"],
+  wallet: [
+    "import",
+    "list",
+    "info",
+    "use",
+    "default",
+    "rename",
+    "migrate",
+    "recover",
+  ],
   token: ["list", "balance", "send"],
   stake: ["create", "list", "deactivate", "withdraw"],
   "jupiter-lend": ["status", "deposit", "withdraw"],
@@ -61,6 +72,11 @@ export function completeLine(
     if (partial.startsWith("--") || path.includes("--"))
       candidates = flags[command] ??
         flags[parts[0]!] ?? ["--json", "--dry-run", "--yes"];
+    else if (
+      parts[0] === "wallet" &&
+      ["use", "default", "info"].includes(parts[1] ?? "")
+    )
+      candidates = cache.walletAliases;
     else if (command === "token balance" || command === "token send")
       candidates = cache.tokenMints;
     else if (command === "stake deactivate" || command === "stake withdraw")
