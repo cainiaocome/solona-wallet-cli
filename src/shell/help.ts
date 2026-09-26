@@ -12,6 +12,7 @@ const HELP: Record<string, string> = {
   set cluster <mainnet-beta|devnet> | set rpc-url <url> | set commitment <level>
   show config | history | clear | help | exit`,
   wallet: "wallet import [--keypair-file <path>]\nwallet info",
+  show: "show config",
   address:
     "address\nShows the imported wallet address without unlocking the keystore.",
   balance: "balance\nShows the SOL balance and lamport count.",

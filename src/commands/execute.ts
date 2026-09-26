@@ -112,6 +112,10 @@ export async function executeParsed(
         await showBalance(context);
         return { exit: false };
       case "wallet":
+        if (command.args.length === 0) {
+          displayTopicHelp(context, "wallet");
+          return { exit: false };
+        }
         requireArgs(
           command,
           1,
@@ -193,6 +197,10 @@ async function executeStake(
   command: ParsedCommand,
 ): Promise<ExecutionResult> {
   const subcommand = command.args[0];
+  if (!subcommand) {
+    displayTopicHelp(context, "stake");
+    return { exit: false };
+  }
   const args = { ...command, args: command.args.slice(1) };
   if (subcommand === "create") await stakeCreate(context, args);
   else if (subcommand === "list") {
@@ -209,6 +217,10 @@ async function executeToken(
   command: ParsedCommand,
 ): Promise<ExecutionResult> {
   const subcommand = command.args[0];
+  if (!subcommand) {
+    displayTopicHelp(context, "token");
+    return { exit: false };
+  }
   const args = { ...command, args: command.args.slice(1) };
   if (subcommand === "list") {
     rejectExtraArgs(args, 0, "token list");
@@ -239,6 +251,10 @@ async function executeLend(
   command: ParsedCommand,
 ): Promise<ExecutionResult> {
   const subcommand = command.args[0];
+  if (!subcommand) {
+    displayTopicHelp(context, "lend");
+    return { exit: false };
+  }
   const args = { ...command, args: command.args.slice(1) };
   if (subcommand === "status") {
     rejectExtraArgs(args, 0, "lend status");
@@ -299,6 +315,10 @@ async function executeTx(
   context: CommandContext,
   command: ParsedCommand,
 ): Promise<ExecutionResult> {
+  if (command.args.length === 0) {
+    displayTopicHelp(context, "tx");
+    return { exit: false };
+  }
   rejectExtraArgs(command, 2, "tx inspect <signature>");
   if (command.args[0] !== "inspect")
     throw unknownCommand(`tx ${command.args[0]}`);
@@ -323,6 +343,11 @@ async function executeTx(
       : "Transaction not found.",
   );
   return { exit: false };
+}
+
+function displayTopicHelp(context: CommandContext, topic: string): void {
+  const help = helpText(topic);
+  context.output.print({ ok: true, help }, help);
 }
 
 function parseOptionalInteger(

@@ -193,10 +193,17 @@ inspect first and only retry after determining whether the transaction landed.
 ```text
 help
 help stake
+token
+stake
+lend
 history
 clear
 exit
 ```
+
+Typing a command group without a subcommand displays that group's available
+commands and usage. This also works with the wallet, transaction, and show
+groups.
 
 The shell stores up to 1,000 filtered commands. Lines containing common secret
 words such as `private key`, `password`, or `passphrase` are not persisted.
