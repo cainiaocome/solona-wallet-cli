@@ -30,11 +30,13 @@ The more focused reference documents are also useful:
   decisions, dependency-install incident, release workflow, and known limits.
 - [Jupiter Lend Earn](jupiter-lend.md) documents the deliberately narrow v0.2
   mainnet USDC integration.
-- [Original specification](../specs/spec.md) records the initial product
+- [Project review (2026-09-27)](review-2026-09-27.md) records outstanding findings,
+  reproduction evidence, and regression-test guidance.
+- [Original specification](../specs/spec.md#part-i-original-product-specification) records the initial product
   requirements and is preserved as a historical reference.
-- [Multiple-wallet product design](../specs/multiple-wallets-design.md) records
+- [Multiple-wallet product design](../specs/spec.md#part-ii-multiple-wallet-product-design) records
   the approved direction; product specifications live in `specs/`.
-- [Multiple-wallet implementation specification](../specs/multiple-wallets-implementation.md)
+- [Multiple-wallet implementation specification](../specs/spec.md#part-iii-multiple-wallet-implementation-contract)
   records the schemas, recovery behavior, command contracts, and acceptance
   tests used to implement the multi-wallet feature.
 
