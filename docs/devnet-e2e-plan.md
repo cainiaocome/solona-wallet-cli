@@ -286,7 +286,7 @@ bounded age/deadline and surface stuck cycles for manual investigation.
 
 ## Validation record
 
-Recorded 2026-09-26:
+Recorded through 2026-09-27 UTC:
 
 - 65 unit tests passed; TypeScript lint and build passed.
 - Linux/amd64 Docker image build passed; all 16 Docker E2E tests passed.
@@ -303,9 +303,17 @@ Recorded 2026-09-26:
   once via direct JSON-RPC and does not retry an unknown result. The one-shot
   failure behavior passed its local 429 regression test, but it has not been
   exercised against a successful live airdrop because the shared faucet is
-  currently rate-limited. No GitHub Actions run has yet
-  occurred; the workflow is available for a later scheduled/manual run, with
-  an optional protected Devnet RPC provider secret.
+  currently rate-limited. No CLI live-chain command test ran because funding
+  failed before wallet import.
+- Docker GitHub Actions runs [36282996061](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36282996061),
+  [36283186689](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36283186689),
+  and [36283339265](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36283339265)
+  all passed and published the exact tested image. The first run showed Node 20
+  action-runtime warnings; the next upgraded to Node 24-compatible action
+  majors, and the final run used Ubuntu 24.04. The scheduled/manual live Devnet
+  workflow has not run; it still requires faucet availability (or a dedicated
+  provider), and the optional stake lifecycle requires its protected key
+  secret.
 
 The Solana cluster documentation warns that public RPC rate limits can change
 and the endpoint has no production SLA; treat an airdrop 429 or faucet error as

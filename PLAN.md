@@ -20,8 +20,8 @@ commands without weakening deterministic CI or risking Mainnet funds.
   passed and published the tested image.
 - [complete] Updated workflow action majors to native Node 24 releases after
   CI reported Node 20 runtime deprecation warnings; follow-up CI passed.
-- [in progress] Pin the runner to Ubuntu 24.04 after GitHub announced the
-  `ubuntu-latest` migration to Ubuntu 26; validate the final workflow run.
+- [complete] Pinned both workflows to Ubuntu 24.04 after GitHub announced the
+  `ubuntu-latest` migration to Ubuntu 26; final CI passed and published.
 
 ## Constraints and decisions
 
@@ -36,8 +36,7 @@ commands without weakening deterministic CI or risking Mainnet funds.
 - Do not retry a faucet transaction when its result is unknown. The public
   faucet returned a 429 during local validation; use a configured dedicated
   Devnet RPC provider or wait for the faucet limit to clear.
-- The requested implementation commit is pushed. Remaining workflow cleanup
-  pins the tested Ubuntu runner before the announced `ubuntu-latest` migration.
+- The implementation and workflow maintenance commits are pushed to `master`.
 
 ## Validation
 
@@ -55,12 +54,12 @@ commands without weakening deterministic CI or risking Mainnet funds.
 - Initial push Actions run [36282996061](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36282996061)
   passed every gate and published. It emitted Node 20 deprecation warnings;
   the follow-up action upgrade run [36283186689](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36283186689)
-  passed and removed those warnings. GitHub then announced the Ubuntu 26
-  migration, so the runner pin is pending its own CI run.
+  passed and removed those warnings. Final Ubuntu 24.04 run
+  [36283339265](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36283339265)
+  passed every gate and published with no deprecation annotations.
 
 ## Remaining
 
-- Validate and push the Ubuntu 24.04 runner pin; monitor its CI run.
 - Re-run live smoke after faucet availability or a protected provider is
   configured; then record the actual outcome here and in `docs/`.
 - Run the optional cross-epoch lifecycle only after the dedicated Devnet-only
