@@ -41,17 +41,39 @@ jobs:
       - name: Build the exact image under test
         run: docker build --platform linux/amd64 -t "$SOL_WALLET_E2E_IMAGE" .
       - name: Check and install Python E2E tooling
+        id: python_tools
         run: |
           python3 -m pip install --disable-pip-version-check --no-cache-dir pexpect black==25.1.0
           python3 -m black --check test/e2e
+      - name: Prepare lifecycle state directory
+        id: prepare_lifecycle_state
+        if: ${{ (github.event_name == 'schedule' || inputs.run_stake_lifecycle) && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/devnet-stake-lifecycle-state"
+          chmod 700 "$RUNNER_TEMP/devnet-stake-lifecycle-state"
+      - name: Restore private lifecycle identity
+        id: restore_lifecycle_state
+        if: ${{ (github.event_name == 'schedule' || inputs.run_stake_lifecycle) && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && steps.prepare_lifecycle_state.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/devnet-stake-lifecycle-state
+          key: devnet-stake-lifecycle-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            devnet-stake-lifecycle-${{ github.ref_name }}-
       - name: Run real-chain Devnet smoke tests
+        id: devnet_smoke
+        continue-on-error: true
         env:
           SOL_WALLET_DEVNET_RPC_URL: ${{ secrets.SOL_WALLET_DEVNET_RPC_URL }}
         run: python3 test/e2e/run_devnet_e2e.py
       - name: Advance the resumable Devnet native-stake lifecycle
-        if: ${{ (github.event_name == 'schedule' || inputs.run_stake_lifecycle) && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+        id: lifecycle
+        if: ${{ always() && !cancelled() && (github.event_name == 'schedule' || inputs.run_stake_lifecycle) && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && steps.python_tools.outcome == 'success' && steps.prepare_lifecycle_state.outcome == 'success' && steps.restore_lifecycle_state.outcome == 'success' }}
         env:
           SOL_WALLET_DEVNET_LIFECYCLE_KEYPAIR_JSON: ${{ secrets.SOL_WALLET_DEVNET_LIFECYCLE_KEYPAIR_JSON }}
+          SOL_WALLET_DEVNET_LIFECYCLE_STATE_FILE: ${{ runner.temp }}/devnet-stake-lifecycle-state/state.json
           SOL_WALLET_DEVNET_RPC_URL: ${{ secrets.SOL_WALLET_DEVNET_RPC_URL }}
         run: |
           if [[ -z "${SOL_WALLET_DEVNET_LIFECYCLE_KEYPAIR_JSON:-}" ]]; then
@@ -62,4 +84,21 @@ jobs:
             echo "::error::Configure SOL_WALLET_DEVNET_LIFECYCLE_KEYPAIR_JSON to run the lifecycle."
             exit 1
           fi
+          echo "executed=true" >> "$GITHUB_OUTPUT"
           python3 test/e2e/run_devnet_lifecycle.py
+      - name: Persist lifecycle identity
+        if: ${{ always() && !cancelled() && steps.lifecycle.outputs.executed == 'true' && steps.restore_lifecycle_state.outcome == 'success' }}
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/devnet-stake-lifecycle-state
+          key: devnet-stake-lifecycle-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Report lifecycle state restore failure
+        if: ${{ always() && (steps.prepare_lifecycle_state.outcome == 'failure' || steps.restore_lifecycle_state.outcome == 'failure') }}
+        run: |
+          echo "::error::Could not prepare or restore the persisted lifecycle identity; lifecycle writes were skipped."
+          exit 1
+      - name: Preserve Devnet smoke failure
+        if: ${{ always() && steps.devnet_smoke.outcome == 'failure' }}
+        run: |
+          echo "::error::The Devnet smoke suite failed; see its step output."
+          exit 1

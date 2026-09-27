@@ -26,7 +26,11 @@ import {
   type JupiterLendPosition,
   type WalletInstruction,
 } from "../integrations/jupiter-lend/adapter.js";
-import { confirmSignature } from "./send.js";
+import {
+  assertBlockhashFresh,
+  broadcastSignedTransaction,
+  confirmSignature,
+} from "./send.js";
 import type { CommandContext } from "./context.js";
 import { requireSelectedWallet, requireWallet } from "./read-only.js";
 import {
@@ -284,14 +288,18 @@ async function runLendInstruction(
     )
   )
     throw new TransactionRejectedError();
+  signer.setBeforeSign(() =>
+    assertBlockhashFresh(
+      rpc,
+      latest.value.lastValidBlockHeight,
+      context.config.commitment,
+    ),
+  );
   const signed = await signTransactionMessageWithSigners(message);
-  const signature = await rpcRequest(
-    rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
-      encoding: "base64",
-      skipPreflight: true,
-      preflightCommitment: context.config.commitment,
-    }),
-    "transaction broadcast",
+  const signature = await broadcastSignedTransaction(
+    rpc,
+    signed,
+    context.config.commitment,
   );
   const status = await confirmSignature(
     rpc,

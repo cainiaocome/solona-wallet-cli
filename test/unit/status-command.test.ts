@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -288,6 +288,66 @@ describe("status portfolio overview", () => {
     }
   });
 
+  it.each([
+    ["oneshot", "missing"],
+    ["interactive", "missing"],
+    ["oneshot", "invalid"],
+    ["interactive", "invalid"],
+  ] as const)(
+    "reports selected wallet status with %s selection and a %s default keystore",
+    async (executionMode, defaultKeystoreHealth) => {
+      const directory = await mkdtemp(
+        path.join(os.tmpdir(), "sol-wallet-status-missing-default-"),
+      );
+      const output: string[] = [];
+      try {
+        const defaultWallet = await createWallet(directory, "primary", 37);
+        const selectedWallet = await createWallet(directory, "savings", 57);
+        const defaultKeystorePath = path.join(
+          directory,
+          "wallets",
+          `${defaultWallet.id}.json`,
+        );
+        if (defaultKeystoreHealth === "missing")
+          await unlink(defaultKeystorePath);
+        else await writeFile(defaultKeystorePath, "{}");
+
+        const context = createCommandContext(
+          {
+            configDir: directory,
+            cluster: "mainnet",
+            rpcUrl: "https://api.mainnet.solana.com",
+            commitment: "confirmed",
+          },
+          { json: true, verbose: false },
+          { currentWalletId: selectedWallet.id, executionMode },
+        );
+        context.getClient = () => ({ rpc: healthyRpc() }) as never;
+        vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+          output.push(String(chunk));
+          return true;
+        });
+
+        await executeLine(context, "status");
+
+        const result = JSON.parse(output[0]!);
+        expect(result).toMatchObject({
+          ok: true,
+          health: "healthy",
+          wallet: { id: selectedWallet.id, alias: "savings" },
+          defaultWallet: { id: defaultWallet.id, alias: "primary" },
+          defaultWalletHealth: defaultKeystoreHealth,
+          balances: {
+            sol: { status: "available", amount: "1.25" },
+            tokens: { status: "available" },
+          },
+        });
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
   it("keeps native stake and Jupiter positions separate from liquid balances", async () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "sol-wallet-status-human-positions-"),
@@ -409,20 +469,20 @@ function request<T>(value: T) {
   return { send: async () => value };
 }
 
-async function createWallet(configDir: string) {
+async function createWallet(configDir: string, alias = "daily", seed = 37) {
   const secret = await normalizeSecretKey(
-    Uint8Array.from({ length: 32 }, (_, index) => index + 37),
+    Uint8Array.from({ length: 32 }, (_, index) => index + seed),
   );
   try {
     const walletAddress = await deriveAddress(secret);
-    const pathName = path.join(configDir, "fixture.json");
+    const pathName = path.join(configDir, `fixture-${seed}.json`);
     await writeKeystoreFileAtomic(
       pathName,
       await encryptSecretKey(secret, walletAddress, "fixture-passphrase"),
     );
     const { entry } = await createRegistryEntry(
       configDir,
-      "daily",
+      alias,
       walletAddress,
       pathName,
     );

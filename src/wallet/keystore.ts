@@ -27,20 +27,44 @@ export const KDF_DEFAULTS = {
   parallelism: 1,
 };
 
+/**
+ * Supported Argon2id bounds: 8,192–262,144 KiB of memory, 1–10 iterations,
+ * and 1–4 lanes. The generated 65,536 KiB / 3 / 1 format remains within bounds.
+ */
+const ARGON2_BOUNDS = {
+  memoryKiB: { min: 8_192, max: 262_144 },
+  iterations: { min: 1, max: 10 },
+  parallelism: { min: 1, max: 4 },
+} as const;
+
+const kdfSchema = z
+  .object({
+    name: z.literal("argon2id"),
+    memoryKiB: z
+      .number()
+      .int()
+      .min(ARGON2_BOUNDS.memoryKiB.min)
+      .max(ARGON2_BOUNDS.memoryKiB.max),
+    iterations: z
+      .number()
+      .int()
+      .min(ARGON2_BOUNDS.iterations.min)
+      .max(ARGON2_BOUNDS.iterations.max),
+    parallelism: z
+      .number()
+      .int()
+      .min(ARGON2_BOUNDS.parallelism.min)
+      .max(ARGON2_BOUNDS.parallelism.max),
+    salt: z.string().min(1),
+  })
+  .strict();
+
 const keystoreSchema = z
   .object({
     version: z.literal(1),
     kind: z.literal("solana-private-key"),
     publicKey: z.string().min(32),
-    kdf: z
-      .object({
-        name: z.literal("argon2id"),
-        memoryKiB: z.number().int().positive(),
-        iterations: z.number().int().positive(),
-        parallelism: z.number().int().positive(),
-        salt: z.string().min(1),
-      })
-      .strict(),
+    kdf: kdfSchema,
     cipher: z
       .object({
         name: z.literal("aes-256-gcm"),
@@ -53,6 +77,15 @@ const keystoreSchema = z
   .strict();
 
 export type KeystoreFile = z.infer<typeof keystoreSchema>;
+
+function validateKdf(value: unknown): z.infer<typeof kdfSchema> {
+  const parsed = kdfSchema.safeParse(value);
+  if (!parsed.success)
+    throw new KeystoreError(
+      "Keystore Argon2 parameters are outside supported resource bounds.",
+    );
+  return parsed.data;
+}
 
 function canonicalAad(
   file: Pick<KeystoreFile, "version" | "kind" | "publicKey" | "kdf" | "cipher">,
@@ -172,7 +205,7 @@ export async function encryptSecretKey(
     throw new KeystoreError("The keystore passphrase cannot be empty.");
   const salt = randomBytes(16);
   const iv = randomBytes(12);
-  const kdf = { ...KDF_DEFAULTS, salt: salt.toString("base64") };
+  const kdf = validateKdf({ ...KDF_DEFAULTS, salt: salt.toString("base64") });
   const fileWithoutCiphertext = {
     version: 1 as const,
     kind: "solana-private-key" as const,
@@ -213,7 +246,8 @@ export async function decryptSecretKey(
   file: KeystoreFile,
   passphrase: string,
 ): Promise<Buffer> {
-  const salt = Buffer.from(file.kdf.salt, "base64");
+  const kdf = validateKdf(file.kdf);
+  const salt = Buffer.from(kdf.salt, "base64");
   const iv = Buffer.from(file.cipher.iv, "base64");
   const tag = Buffer.from(file.cipher.tag, "base64");
   const ciphertext = Buffer.from(file.ciphertext, "base64");
@@ -227,9 +261,9 @@ export async function decryptSecretKey(
   const key = await deriveKey(
     passphrase,
     salt,
-    file.kdf.memoryKiB,
-    file.kdf.iterations,
-    file.kdf.parallelism,
+    kdf.memoryKiB,
+    kdf.iterations,
+    kdf.parallelism,
   );
   try {
     const decipher = createDecipheriv("aes-256-gcm", key, iv);

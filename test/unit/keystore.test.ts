@@ -2,7 +2,15 @@ import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import bs58 from "bs58";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const mockedArgon = vi.hoisted(() => ({ hashRaw: vi.fn() }));
+vi.mock("@node-rs/argon2", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@node-rs/argon2")>();
+  mockedArgon.hashRaw.mockImplementation(actual.hashRaw);
+  return { ...actual, hashRaw: mockedArgon.hashRaw };
+});
+
 import {
   deriveAddress,
   decodeBase58SecretKey,
@@ -15,6 +23,10 @@ import {
 } from "../../src/wallet/keystore.js";
 
 describe("encrypted keystore", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("round-trips a disposable deterministic key and uses authenticated metadata", async () => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "sol-wallet-keystore-"),
@@ -128,6 +140,48 @@ describe("encrypted keystore", () => {
       await expect(writeKeystoreFileAtomic(keystorePath, file)).rejects.toThrow(
         /already exists/,
       );
+      secret.fill(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects out-of-bounds Argon2 parameters before invoking the KDF", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-keystore-kdf-bounds-"),
+    );
+    try {
+      const secret = await normalizeSecretKey(
+        Uint8Array.from({ length: 32 }, (_, index) => index + 3),
+      );
+      const file = await encryptSecretKey(
+        secret,
+        await deriveAddress(secret),
+        "bounds-test-passphrase",
+      );
+      const keystorePath = path.join(directory, "wallet.json");
+
+      for (const invalidKdf of [
+        { ...file.kdf, memoryKiB: 262_145 },
+        { ...file.kdf, memoryKiB: 8_191 },
+        { ...file.kdf, iterations: 11 },
+        { ...file.kdf, parallelism: 5 },
+      ]) {
+        const invalidFile = { ...file, kdf: invalidKdf };
+        await writeFile(keystorePath, JSON.stringify(invalidFile));
+        await expect(readKeystoreFile(keystorePath)).rejects.toThrow(
+          /malformed/,
+        );
+
+        mockedArgon.hashRaw.mockClear();
+        await expect(
+          decryptSecretKey(
+            invalidFile as typeof file,
+            "bounds-test-passphrase",
+          ),
+        ).rejects.toThrow(/resource bounds/);
+        expect(mockedArgon.hashRaw).not.toHaveBeenCalled();
+      }
       secret.fill(0);
     } finally {
       await rm(directory, { recursive: true, force: true });

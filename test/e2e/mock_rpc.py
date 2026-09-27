@@ -6,6 +6,7 @@ not call sendTransaction.
 """
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import base64
 import json
 import threading
 
@@ -20,7 +21,6 @@ def base58(data: bytes) -> str:
     return alphabet[0] * (len(data) - len(data.lstrip(b"\0"))) + (result or alphabet[0])
 
 
-TEST_SIGNATURE = base58(bytes(range(1, 65)))
 TEST_MINT = "11111111111111111111111111111114"
 TEST_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 TEST_TOKEN_ACCOUNT = "11111111111111111111111111111115"
@@ -165,7 +165,10 @@ class Handler(BaseHTTPRequestHandler):
             }
         elif method == "sendTransaction":
             self.state.transactions.append(params[0])
-            result = TEST_SIGNATURE
+            transaction = base64.b64decode(params[0])
+            # Solana's short-vector signature count is one for these wallet
+            # transactions; echo the signature embedded in the signed bytes.
+            result = base58(transaction[1:65])
         elif method == "getSignatureStatuses":
             result = {
                 "context": {"slot": 101},

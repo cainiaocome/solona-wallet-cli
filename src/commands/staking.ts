@@ -53,7 +53,11 @@ import { findValidator, parseValidatorAddress } from "../solana/validators.js";
 import { parseAddress } from "../wallet/address.js";
 import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 import { requireSelectedWallet, requireWallet } from "./read-only.js";
-import { confirmSignature } from "./send.js";
+import {
+  assertBlockhashFresh,
+  broadcastSignedTransaction,
+  confirmSignature,
+} from "./send.js";
 import type { CommandContext } from "./context.js";
 import { assertRpcCluster } from "../solana/rpc.js";
 import { getStakeActivation } from "../integrations/stake-activation.js";
@@ -283,14 +287,18 @@ export async function stakeCreate(
     )
   )
     throw new TransactionRejectedError();
+  signer.setBeforeSign(() =>
+    assertBlockhashFresh(
+      rpc,
+      latest.value.lastValidBlockHeight,
+      context.config.commitment,
+    ),
+  );
   const signed = await signTransactionMessageWithSigners(message);
-  const signature = await rpcRequest(
-    rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
-      encoding: "base64",
-      skipPreflight: true,
-      preflightCommitment: context.config.commitment,
-    }),
-    "transaction broadcast",
+  const signature = await broadcastSignedTransaction(
+    rpc,
+    signed,
+    context.config.commitment,
   );
   const status = await confirmSignature(
     rpc,
@@ -425,14 +433,34 @@ export async function readStakeAccounts(
       parseStakeAccount(context, accountAddress, account),
     ),
   );
-  for (const entry of registry.accounts)
-    if (!byAddress.has(entry.address))
-      accounts.push({
-        address: entry.address,
-        validatorVoteAccount: entry.validatorVoteAccount,
-        state: "unknown",
-        source: "local-registry",
-      });
+  const missingEntries = registry.accounts.filter(
+    (entry) => !byAddress.has(entry.address),
+  );
+  const closedAddresses: string[] = [];
+  for (const entry of missingEntries) {
+    try {
+      const response = await rpcRequest(
+        rpc.getAccountInfo(parseAddress(entry.address), {
+          commitment: context.config.commitment,
+        }),
+        "local stake account lookup",
+      );
+      if (response.value === null) {
+        closedAddresses.push(entry.address);
+        continue;
+      }
+    } catch {
+      // A failed point lookup is not proof the account closed; retain the hint.
+    }
+    accounts.push({
+      address: entry.address,
+      validatorVoteAccount: entry.validatorVoteAccount,
+      state: "unknown",
+      source: "local-registry",
+    });
+  }
+  if (closedAddresses.length)
+    await removeStakeRegistryEntries(context, closedAddresses);
   context.completion.stakeAccounts = accounts.map((account) =>
     String(account.address),
   );
@@ -458,6 +486,7 @@ export async function stakeDeactivate(
   await runStakeInstruction(
     context,
     command,
+    signer,
     [
       insertReadonlyAccounts(
         getDeactivateInstruction({
@@ -511,6 +540,7 @@ export async function stakeWithdraw(
   await runStakeInstruction(
     context,
     command,
+    signer,
     [
       insertReadonlyAccounts(
         getWithdrawInstruction({
@@ -537,6 +567,7 @@ export async function stakeWithdraw(
 async function runStakeInstruction(
   context: CommandContext,
   command: ParsedCommand,
+  signer: EncryptedKeystoreSigner,
   instructions: readonly any[],
   summary: Record<string, unknown>,
   human: string,
@@ -602,14 +633,18 @@ async function runStakeInstruction(
     )
   )
     throw new TransactionRejectedError();
+  signer.setBeforeSign(() =>
+    assertBlockhashFresh(
+      rpc,
+      latest.value.lastValidBlockHeight,
+      context.config.commitment,
+    ),
+  );
   const signed = await signTransactionMessageWithSigners(message);
-  const signature = await rpcRequest(
-    rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
-      encoding: "base64",
-      skipPreflight: true,
-      preflightCommitment: context.config.commitment,
-    }),
-    "transaction broadcast",
+  const signature = await broadcastSignedTransaction(
+    rpc,
+    signed,
+    context.config.commitment,
   );
   const status = await confirmSignature(
     rpc,
@@ -618,6 +653,28 @@ async function runStakeInstruction(
     latest.value.lastValidBlockHeight,
     !context.output.json && Boolean(process.stderr.isTTY),
   );
+  if (
+    summary.closesAccount === true &&
+    typeof summary.stakeAccount === "string"
+  ) {
+    try {
+      const account = await rpcRequest(
+        rpc.getAccountInfo(parseAddress(summary.stakeAccount), {
+          commitment: context.config.commitment,
+        }),
+        "closed stake account verification",
+      );
+      if (account.value === null) {
+        await removeStakeRegistryEntries(context, [summary.stakeAccount]);
+        context.completion.stakeAccounts =
+          context.completion.stakeAccounts.filter(
+            (value) => value !== summary.stakeAccount,
+          );
+      }
+    } catch {
+      // Keep the local hint unless a successful chain lookup proves closure.
+    }
+  }
   context.output.print(
     {
       ok: true,
@@ -887,34 +944,65 @@ export async function addStakeRegistryEntry(
       context.config.configDir,
       selected.identity.id,
     );
-    const temporaryDirectory = await mkdtemp(
-      path.join(path.dirname(target), ".stake-registry-"),
-    );
-    const temporaryPath = path.join(temporaryDirectory, "stake-accounts.json");
-    try {
-      const temporaryFile = await open(temporaryPath, "wx", 0o600);
-      try {
-        await temporaryFile.writeFile(
-          `${JSON.stringify(registry, null, 2)}\n`,
-          "utf8",
-        );
-        // Flush file contents before rename makes the new registry visible.
-        await temporaryFile.sync();
-      } finally {
-        await temporaryFile.close();
-      }
-      await chmod(temporaryPath, 0o600);
-      await rename(temporaryPath, target);
-      const directoryHandle = await open(path.dirname(target), "r");
-      try {
-        await directoryHandle.sync();
-      } finally {
-        await directoryHandle.close();
-      }
-    } finally {
-      await rm(temporaryDirectory, { recursive: true, force: true });
-    }
+    await writeStakeRegistryFile(target, registry);
   });
+}
+
+/** Retire local recovery hints only after chain lookup proved the account absent. */
+export async function removeStakeRegistryEntries(
+  context: CommandContext,
+  addresses: readonly string[],
+): Promise<void> {
+  if (!addresses.length) return;
+  const selected = await requireSelectedWallet(context);
+  const target = scopedStakeRegistryPath(
+    context.config.configDir,
+    selected.identity.id,
+    context.config.cluster,
+  );
+  const addressesToRemove = new Set(addresses);
+  await withStoreLock(context.config.configDir, async () => {
+    const registry = await readStakeRegistry(context);
+    const retained = registry.accounts.filter(
+      (entry) => !addressesToRemove.has(entry.address),
+    );
+    if (retained.length === registry.accounts.length) return;
+    registry.accounts = retained;
+    await writeStakeRegistryFile(target, registry);
+  });
+}
+
+async function writeStakeRegistryFile(
+  target: string,
+  registry: StakeRegistry,
+): Promise<void> {
+  const temporaryDirectory = await mkdtemp(
+    path.join(path.dirname(target), ".stake-registry-"),
+  );
+  const temporaryPath = path.join(temporaryDirectory, "stake-accounts.json");
+  try {
+    const temporaryFile = await open(temporaryPath, "wx", 0o600);
+    try {
+      await temporaryFile.writeFile(
+        `${JSON.stringify(registry, null, 2)}\n`,
+        "utf8",
+      );
+      // Flush file contents before rename makes the new registry visible.
+      await temporaryFile.sync();
+    } finally {
+      await temporaryFile.close();
+    }
+    await chmod(temporaryPath, 0o600);
+    await rename(temporaryPath, target);
+    const directoryHandle = await open(path.dirname(target), "r");
+    try {
+      await directoryHandle.sync();
+    } finally {
+      await directoryHandle.close();
+    }
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }
 
 function createStakeSigner(

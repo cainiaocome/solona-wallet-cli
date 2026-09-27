@@ -24,12 +24,18 @@ export type PassphraseReader = () => Promise<string>;
 
 export class EncryptedKeystoreSigner implements TransactionPartialSigner {
   readonly address: Address;
+  private beforeSign?: () => Promise<void>;
 
   constructor(
     private readonly selectedWallet: SelectedWallet,
     private readonly readPassphrase: PassphraseReader,
   ) {
     this.address = selectedWallet.identity.address;
+  }
+
+  /** Run transaction lifetime checks after passphrase entry and before signing. */
+  setBeforeSign(check: () => Promise<void>): void {
+    this.beforeSign = check;
   }
 
   async signTransactions(
@@ -45,6 +51,7 @@ export class EncryptedKeystoreSigner implements TransactionPartialSigner {
     const passphrase = await this.readPassphrase();
     const secret = await unlockFileAndValidate(file, passphrase);
     try {
+      await this.beforeSign?.();
       const signer = await createKeyPairSignerFromBytes(secret);
       if (signer.address !== this.selectedWallet.identity.address)
         throw new KeystoreError("Selected wallet signer identity mismatch.");

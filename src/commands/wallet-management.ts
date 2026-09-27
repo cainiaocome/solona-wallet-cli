@@ -305,14 +305,11 @@ export async function status(context: CommandContext): Promise<void> {
   const defaultEntry = registry.wallets.find(
     (wallet) => wallet.id === registry.defaultWalletId,
   );
-  if (
-    defaultEntry &&
-    (await walletFileStatus(context.config.configDir, defaultEntry)) !== "ok"
-  )
-    throw new WalletStoreError(
-      "WalletStoreInvalid",
-      `Saved default wallet '${defaultEntry.alias}' has a missing or invalid keystore.`,
-    );
+  const defaultFileStatus = defaultEntry
+    ? await walletFileStatus(context.config.configDir, defaultEntry)
+    : null;
+  const defaultWalletHealth =
+    defaultFileStatus === "ok" ? "healthy" : defaultFileStatus;
   const selected = currentEntry
     ? await resolveWallet(context.config.configDir, currentEntry.id, registry)
     : null;
@@ -553,6 +550,7 @@ export async function status(context: CommandContext): Promise<void> {
   const human = [
     `Wallet: ${current ? `${current.alias} (${current.address})` : "none selected"}`,
     `Default wallet: ${defaultLabel}`,
+    `Default wallet keystore: ${defaultWalletHealth ?? "not configured"}`,
     `Network: ${context.config.cluster.toUpperCase()}${context.config.cluster === "mainnet" ? " (real funds)" : ""}`,
     `RPC: ${rpcState.status === "reachable" ? "reachable; network verified" : "unavailable or on the wrong network"} (${rpcUrl})`,
     `Commitment: ${context.config.commitment}`,
@@ -584,6 +582,7 @@ export async function status(context: CommandContext): Promise<void> {
       ok: true,
       wallet: current,
       defaultWallet,
+      defaultWalletHealth,
       cluster: context.config.cluster,
       rpcUrl,
       commitment: context.config.commitment,

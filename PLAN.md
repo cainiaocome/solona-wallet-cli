@@ -1,21 +1,19 @@
-# Review and specification consolidation
+# Review findings remediation
 
 ## Current task
 
-- Review implementation and tests; report actionable issues without fixing code.
-- Consolidate the three files in `specs/` into `specs/spec.md`, preserving release
-  context, precedence, and requirements; update documentation links.
-- Complete: nine review findings and suggested regression coverage recorded in
-  `docs/review-2026-09-27.md`; the user requested this report/spec checkpoint be
-  committed and pushed before implementation fixes.
-- Validation: 65 unit tests, TypeScript lint/build, and two Python proxy tests
-  passed. Offline probes confirmed lifecycle resume failure, stale stake hints,
-  premature expiry reporting, and wrapper stdout contamination. No live-chain
-  transactions or full Docker E2E run in this review.
-- Formatting and `git diff --check` passed; obsolete spec links removed and
-  final diff contains documentation changes only.
-- Remaining: save this documentation checkpoint, then implement and validate all
-  review findings, including the independent lifecycle ownership finding.
+- Complete checkpoint `ac77a3a`: consolidated specifications and saved the
+  review findings before fixes, per user instruction.
+- Complete: fixed all ten review findings, including transaction
+  ambiguity/expiry, stale stake hints, wrapper JSON output, status behavior,
+  bounded KDF settings, and Devnet lifecycle ownership/resumption/workflow gates.
+- Validation passed: 78 unit tests; lint/build; formatting; Black and Python
+  compilation; Node syntax; diff check; fresh Linux/amd64 image and all 19 local
+  Docker/Python E2E tests. Live Devnet writes were not run.
+- `docs/review-2026-09-27.md` and `docs/devnet-e2e-plan.md` record fixes,
+  decisions, and validation. No system packages installed.
+- The review/specification checkpoint `ac77a3a` was pushed before implementation;
+  the user has now requested this completed remediation be committed and pushed.
 
 ## Previous implementation handoff
 

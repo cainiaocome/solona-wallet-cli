@@ -81,13 +81,33 @@ Keystore writes create a unique file with create-only permissions and publish it
 
 The accepted key inputs are base58 32-byte seeds or 64-byte Solana expanded keypairs, plus JSON byte arrays from a Solana CLI keypair file. Mutable decoded key buffers are filled after use. JavaScript GC/CryptoKey lifetime limitations remain documented in the README.
 
+Argon2id settings are checked before key derivation: memory is 8–256 MiB,
+iterations are 1–10, and parallelism is 1–4. New files use 64 MiB, three
+iterations, and one lane. These limits bound work requested by damaged keystore
+metadata before AES-GCM can authenticate it.
+
 ## RPC and amount rules
 
 All RPC clients are created from the session config and use the configured commitment. RPC data is treated as untrusted and application-specific token/stake shapes are checked before use. Monetary values stay in `bigint`: SOL uses nine decimals and token amounts use the mint's on-chain decimals. Scientific notation, negative values, leading-zero forms, excess precision, and silent rounding are rejected.
 
+Before signing, transaction commands check block height again after passphrase
+entry. If the prepared blockhash expired while the user reviewed the preview or
+entered the passphrase, the CLI aborts without signing or submitting. After
+signing, it derives the transaction signature locally and verifies the RPC's
+response. If that response is lost or differs, the CLI reports the local
+signature and warns that the transaction may have been accepted; inspect it
+before retrying. During confirmation, blockhash expiry is reported only after a
+second status lookup finds no inclusion. An included transaction remains
+pending until the requested confirmation level or a signature-bearing timeout.
+
 Token reads query both the legacy Token Program and Token-2022. Basic Token-2022 transfers use the checked instruction, but mints with extensions are refused because the transfer semantics need explicit support. No third-party token-list metadata is used.
 
 Native staking uses the official generated System and Stake clients. The stake create path is `CreateAccountWithSeed`, `Initialize`, and `DelegateStake`, with the wallet as both authorities and a blockhash-derived seed bounded to System Program seed length. Required Rent, Clock, StakeHistory, and StakeConfig accounts are inserted explicitly because the pinned generated Stake package does not model all builtin positional sysvars. Rent and minimum delegation are queried dynamically. Stake discovery makes two server-side `getProgramAccounts` queries, one for staker and one for withdrawer, rather than downloading and filtering all stake accounts locally. Activation state is calculated by Anza's client-side extension from standard epoch, stake-account, and StakeHistory reads; this replaces the removed `getStakeActivation` RPC. The CLI does not equate a passed deactivation epoch with complete cooldown. A future lockup is checked against chain time and epoch, with the custodian authority honored.
+
+If a locally registered stake address is absent from program-account discovery,
+the CLI checks it directly. It removes that local recovery hint only after a
+successful account lookup confirms the account is closed. RPC failures retain
+the hint for later recovery.
 
 ## History and completion safety
 

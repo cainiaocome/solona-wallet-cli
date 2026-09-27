@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createKeyPairFromBytes } from "@solana/kit";
+import bs58 from "bs58";
 import { createCommandContext } from "../../src/commands/context.js";
 import { executeLine } from "../../src/commands/execute.js";
 import { createRegistryEntry } from "../../src/wallet/store.js";
@@ -198,6 +199,7 @@ describe("command-scoped wallet and output context", () => {
                   lastValidBlockHeight: 200n,
                 },
               }),
+            getBlockHeight: () => request(100n),
             getFeeForMessage: () => request({ value: 5_000n }),
             getBalance: () => request({ value: 10_000_000_000n }),
             simulateTransaction: () =>
@@ -317,13 +319,15 @@ describe("command-scoped wallet and output context", () => {
                   lastValidBlockHeight: 200n,
                 },
               }),
+            getBlockHeight: () => request(100n),
             getFeeForMessage: () => request({ value: 5_000n }),
             getBalance: () => request({ value: 10_000_000_000n }),
             simulateTransaction: () =>
               request({ value: { err: null, logs: [] } }),
             sendTransaction: (encoded: string) => {
               submitted.push(encoded);
-              return request("fixture-signature");
+              const transaction = Buffer.from(encoded, "base64");
+              return request(bs58.encode(transaction.subarray(1, 65)));
             },
             getSignatureStatuses: () =>
               request({

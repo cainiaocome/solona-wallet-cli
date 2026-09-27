@@ -58,7 +58,11 @@ failures, confirmation rejection, and exact no-broadcast assertions.
    This cannot fit into an ordinary PR job: warmup/cooldown is epoch-based and
    may span multiple days. `test/e2e/run_devnet_lifecycle.py` inspects chain
    state and advances at most one safe step per run. It needs a dedicated
-   Devnet-only GitHub Actions secret.
+   Devnet-only GitHub Actions secret. A GitHub Actions cache stores only the
+   lifecycle wallet address, created stake-account address, and create
+   signature, so later runs can identify the test-created account. No private
+   key is cached. If an account exists without a matching saved identity, the
+   runner stops without selecting or changing it.
 4. **Release confidence.** Devnet smoke is additional evidence, not a
    replacement for deterministic CI. Track the latest run and lifecycle state
    separately because the latter takes multiple epoch windows.
@@ -259,12 +263,16 @@ no managed stake
   -> withdraw and verify closure
 ```
 
-Discover managed accounts by the dedicated authority and require exactly one
-account matching the test's expected validator/amount. If it is ambiguous,
-locked, or has unexpected authorities, stop without signing. If Devnet resets
-and the account disappears, start a fresh cycle. Do not sleep for days inside
-one GitHub runner; let later scheduled runs resume from on-chain state. Add a
-bounded age/deadline and surface stuck cycles for manual investigation.
+Resume only the stake-account address saved immediately after this runner
+successfully creates it. Confirm it appears in the wallet's on-chain stake
+listing and that both authorities match the dedicated lifecycle wallet before
+signing. If the saved account is absent, verify getAccountInfo reports it
+closed before starting a fresh cycle. If another stake account exists without a
+saved test identity, or the saved account is ambiguous, locked, or has
+unexpected authorities, stop without signing. If Devnet resets and the account
+is gone, clear the old identity and start a new cycle. Do not sleep for days
+inside one GitHub runner; let later scheduled runs resume. Cache restore/save
+failure fails the job and prevents lifecycle writes.
 
 ## Reporting and acceptance criteria
 
@@ -283,6 +291,11 @@ bounded age/deadline and surface stuck cycles for manual investigation.
   and deterministic tests for unavailable/unsafe cases (including Jupiter's
   positive Mainnet integration). Record the latest actual run and lifecycle
   state in `docs/` after an execution; never infer success from a skipped run.
+- The lifecycle step can run after a Devnet smoke/faucet failure if image build,
+  deterministic tests, Python tooling, and lifecycle-state restoration passed.
+  The workflow still reports the smoke failure, so the overall run remains
+  failed. An already-funded lifecycle wallet can therefore progress while the
+  public faucet is unavailable without hiding smoke failures.
 
 ## Validation record
 
@@ -319,3 +332,16 @@ The Solana cluster documentation warns that public RPC rate limits can change
 and the endpoint has no production SLA; treat an airdrop 429 or faucet error as
 an infrastructure/setup failure, not a passing product E2E result.
 [Solana public cluster endpoint guidance](https://solana.com/docs/references/clusters).
+
+## Review remediation validation — 2026-09-27
+
+After the review findings were saved, fixes passed 78 TypeScript unit tests,
+lint, build, formatting, Black, Python compilation, Node syntax checks, and all
+19 local Docker/Python E2E tests, including three offline lifecycle safety
+tests. The container run verified the packaged runtime image and interactive
+transaction flows against the local mock RPC.
+
+No live Devnet lifecycle transaction was submitted during this remediation.
+The public faucet and protected lifecycle key remain prerequisites for
+observing a full lifecycle across real epochs. GitHub Actions cache v5 carries
+the public lifecycle identity between runs and uses Node 24.

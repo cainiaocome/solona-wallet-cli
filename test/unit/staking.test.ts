@@ -21,6 +21,7 @@ import {
   STAKE_WITHDRAW_AUTHORITY_OFFSET,
   STAKE_CONFIG_ADDRESS,
   addStakeRegistryEntry,
+  readStakeAccounts,
   readStakeRegistry,
 } from "../../src/commands/staking.js";
 import { createCommandContext } from "../../src/commands/context.js";
@@ -199,6 +200,74 @@ describe("session cluster safety", () => {
     }
   });
 
+  it("removes a local stake hint after an authoritative lookup proves the account closed", async () => {
+    const configDir = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-stake-closed-"),
+    );
+    const id = "d8ed414d-2175-4ab6-a0c9-4388514f5952";
+    const context = stakeContext(configDir, id, "daily", wallet, "devnet");
+    const stakeAddress = "11111111111111111111111111111114";
+    try {
+      await addStakeRegistryEntry(context, {
+        address: stakeAddress,
+        validatorVoteAccount: "11111111111111111111111111111115",
+        createdSignature: "test-signature",
+        createdAt: "2026-09-26T00:00:00.000Z",
+      });
+      context.getClient = () =>
+        ({
+          rpc: {
+            getProgramAccounts: () => request([]),
+            getAccountInfo: () => request({ value: null }),
+          },
+        }) as never;
+
+      const accounts = await readStakeAccounts(context, wallet, true);
+
+      expect(accounts).toEqual([]);
+      expect((await readStakeRegistry(context)).accounts).toEqual([]);
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+
+  it("retains a local stake hint when account lookup fails", async () => {
+    const configDir = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-stake-unavailable-"),
+    );
+    const id = "d8ed414d-2175-4ab6-a0c9-4388514f5952";
+    const context = stakeContext(configDir, id, "daily", wallet, "devnet");
+    const stakeAddress = "11111111111111111111111111111114";
+    try {
+      await addStakeRegistryEntry(context, {
+        address: stakeAddress,
+        validatorVoteAccount: "11111111111111111111111111111115",
+        createdSignature: "test-signature",
+        createdAt: "2026-09-26T00:00:00.000Z",
+      });
+      context.getClient = () =>
+        ({
+          rpc: {
+            getProgramAccounts: () => request([]),
+            getAccountInfo: () => ({
+              send: async () => {
+                throw new Error("RPC unavailable");
+              },
+            }),
+          },
+        }) as never;
+
+      const accounts = await readStakeAccounts(context, wallet, true);
+
+      expect(accounts).toMatchObject([
+        { address: stakeAddress, state: "unknown", source: "local-registry" },
+      ]);
+      expect((await readStakeRegistry(context)).accounts).toHaveLength(1);
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps stake metadata paths separate for each wallet and network", () => {
     const dailyMainnet = scopedStakeRegistryPath(
       "/tmp/wallets",
@@ -248,3 +317,7 @@ describe("session cluster safety", () => {
     expect(clusterSchema.safeParse("mainnet-beta").success).toBe(false);
   });
 });
+
+function request<T>(value: T) {
+  return { send: async () => value };
+}

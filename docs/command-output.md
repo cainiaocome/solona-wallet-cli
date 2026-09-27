@@ -25,6 +25,10 @@ and `token list --accounts` for individual token-account addresses.
 
 The output includes the wallet, saved default, network, sanitized RPC endpoint,
 commitment, and refresh time. `MAINNET` is explicitly marked as real funds.
+The “Default wallet keystore” field reports whether the saved default's local
+keystore is healthy. A missing or invalid unrelated default appears as a
+separate diagnostic and does not prevent status from reading a different
+healthy wallet selected for this process.
 `show config` remains the local configuration view and does not check RPC
 health or fetch balances. Human TTY sessions show a short refresh notice while
 the chain sections load; JSON output remains free of progress text.

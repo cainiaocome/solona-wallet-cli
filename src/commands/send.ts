@@ -3,6 +3,7 @@ import {
   compileTransaction,
   createTransactionMessage,
   getBase64EncodedWireTransaction,
+  getSignatureFromTransaction,
   getCompiledTransactionMessageEncoder,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
@@ -128,14 +129,18 @@ export async function sendSol(
     ))
   )
     throw new TransactionRejectedError();
+  signer.setBeforeSign(() =>
+    assertBlockhashFresh(
+      rpc,
+      latest.value.lastValidBlockHeight,
+      context.config.commitment,
+    ),
+  );
   const signed = await signTransactionMessageWithSigners(message);
-  const signature = await rpcRequest(
-    rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
-      encoding: "base64",
-      skipPreflight: true,
-      preflightCommitment: context.config.commitment,
-    }),
-    "transaction broadcast",
+  const signature = await broadcastSignedTransaction(
+    rpc,
+    signed,
+    context.config.commitment,
   );
   const status = await confirmSignature(
     rpc,
@@ -212,11 +217,35 @@ export async function confirmSignature(
           rpc.getBlockHeight({ commitment }),
           "block height lookup",
         );
-        if (BigInt(blockHeight as bigint) > lastValidBlockHeight)
+        if (BigInt(blockHeight as bigint) > lastValidBlockHeight && !status) {
+          // The status may have changed after the first lookup while the
+          // block-height request was in flight. Recheck before calling it lost.
+          const boundaryStatus = await rpcRequest(
+            rpc.getSignatureStatuses([signature as never], {
+              searchTransactionHistory: true,
+            }),
+            "transaction confirmation lookup",
+          );
+          const included = boundaryStatus.value[0];
+          if (included?.err)
+            throw new ConfirmationError(
+              `Transaction failed after broadcast. Signature: ${signature}. Error: ${safeJson(included.err)}`,
+              { signature },
+            );
+          if (included?.confirmationStatus) {
+            if (commitmentSatisfied(included.confirmationStatus, commitment))
+              return {
+                slot: included.slot,
+                confirmationStatus: included.confirmationStatus,
+              };
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            continue;
+          }
           throw new ConfirmationError(
             `Transaction blockhash expired before confirmation. Query signature ${signature} before retrying.`,
             { signature },
           );
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
@@ -233,6 +262,55 @@ export async function confirmSignature(
     );
   } finally {
     if (showedProgress) process.stderr.write("\n");
+  }
+}
+
+/**
+ * Keep transaction lifetime valid through the passphrase prompt. The signer
+ * calls this after unlocking the key and immediately before creating a
+ * signature, so time spent reviewing a preview cannot silently stale it.
+ */
+export async function assertBlockhashFresh(
+  rpc: ReturnType<CommandContext["getClient"]>["rpc"],
+  lastValidBlockHeight: bigint,
+  commitment: "processed" | "confirmed" | "finalized",
+): Promise<void> {
+  const height = await rpcRequest(
+    rpc.getBlockHeight({ commitment }),
+    "transaction lifetime lookup",
+  );
+  if (BigInt(height as bigint) > lastValidBlockHeight)
+    throw new TransactionRejectedError(
+      "The transaction preview expired before signing. No transaction was signed or broadcast; run the command again for a fresh preview.",
+    );
+}
+
+/** Submit once and retain the local signature even if the RPC response is lost. */
+export async function broadcastSignedTransaction(
+  rpc: ReturnType<CommandContext["getClient"]>["rpc"],
+  signed: Parameters<typeof getBase64EncodedWireTransaction>[0],
+  commitment: "processed" | "confirmed" | "finalized",
+): Promise<string> {
+  const signature = String(getSignatureFromTransaction(signed));
+  try {
+    const returned = await rpcRequest(
+      rpc.sendTransaction(getBase64EncodedWireTransaction(signed), {
+        encoding: "base64",
+        skipPreflight: true,
+        preflightCommitment: commitment,
+      }),
+      "transaction broadcast",
+    );
+    if (String(returned) !== signature)
+      throw new Error(
+        "RPC returned a signature different from the signed transaction",
+      );
+    return signature;
+  } catch {
+    throw new ConfirmationError(
+      `The broadcast response could not be verified. The transaction may have been accepted. Query signature ${signature} before retrying.`,
+      { signature, broadcastOutcomeUnknown: true },
+    );
   }
 }
 

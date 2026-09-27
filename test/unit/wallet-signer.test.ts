@@ -93,6 +93,51 @@ describe("wallet-bound transaction signer", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("runs lifetime validation after passphrase entry and refuses stale signatures", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-signer-expiry-"),
+    );
+    const wallets = path.join(directory, "wallets");
+    await mkdir(wallets, { mode: 0o700 });
+    const wallet = await createWallet(wallets, 34, "wallet-pass");
+    let checked = 0;
+    try {
+      let message = createTransactionMessage({ version: 0 });
+      message = setTransactionMessageFeePayer(address(wallet.address), message);
+      message = setTransactionMessageLifetimeUsingBlockhash(
+        {
+          blockhash: "11111111111111111111111111111111" as never,
+          lastValidBlockHeight: 10n,
+        },
+        message,
+      );
+      const unsigned = compileTransaction(message);
+      const signer = new EncryptedKeystoreSigner(
+        {
+          identity: {
+            id: "d8ed414d-2175-4ab6-a0c9-4388514f5952",
+            alias: "daily",
+            address: address(wallet.address),
+          },
+          keystorePath: wallet.path,
+        },
+        async () => "wallet-pass",
+      );
+      signer.setBeforeSign(async () => {
+        checked += 1;
+        throw new Error("stale blockhash");
+      });
+
+      await expect(signer.signTransactions([unsigned])).rejects.toThrow(
+        "stale blockhash",
+      );
+      expect(checked).toBe(1);
+    } finally {
+      wallet.secret.fill(0);
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 async function createWallet(
