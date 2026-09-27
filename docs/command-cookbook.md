@@ -163,7 +163,9 @@ stake list
 
 The table includes activation state, account balance, delegated amount,
 validator vote account, and stake-account address. An `unknown` state can refer
-to a local recovery hint that the selected RPC did not return.
+to a local recovery hint that the selected RPC did not return. Activation is
+calculated from the stake account, current epoch, and StakeHistory data; it
+does not rely on the removed `getStakeActivation` RPC method.
 
 Request deactivation and later withdraw inactive stake:
 

@@ -2,46 +2,57 @@
 
 ## Goal
 
-Improve the interactive and human-readable CLI experience from the UX review
-while preserving signing safeguards and line-oriented JSON behavior.
+Add persistent Devnet on-chain end-to-end coverage for network-facing CLI
+commands without weakening deterministic CI or risking Mainnet funds.
 
 ## Current state
 
-- Baseline: clean `master` at `35bd90d`.
-- Implementation commit `6e5f0c4` is pushed to `master`.
-- [complete] `status` is an on-demand dashboard: it verifies RPC/network,
-  reports SOL and aggregated token balances, and shows separate native-stake
-  and mainnet Jupiter Lend positions. Failed sections remain unavailable, not
-  zero; no RPC calls were added to shell startup.
-- [complete] Human token, validator, stake, Jupiter, and transaction outputs are
-  more scannable. Writes have action-specific confirmations, TTY-only progress,
-  and receipts with signature, slot, wallet, network, and Explorer link.
-- [complete] Added lightweight `--help`, no-wallet onboarding, help/usage/
-  completion updates, beginner docs, and source comments for new boundaries.
-- [complete] Added unit and Docker/PTTY E2E coverage and updated beginner docs.
-- [complete] Commit/push and GitHub Actions validation; no workflow failures
-  required fixes.
+- [complete] Added the standing real-Devnet E2E rule to `AGENTS.md`.
+- [complete] Added scheduled/manual Devnet smoke workflow, disposable SOL/token
+  fixtures, method/status-only RPC recording proxy, and no-broadcast assertions.
+- [complete] Added an optional resumable stake lifecycle runner guarded by a
+  dedicated Devnet-only GitHub secret and default-branch workflow conditions.
+- [complete] Corrected the Devnet genesis hash and added a regression test;
+  the prior wrong value was duplicated in the mock fixture.
+- [complete] Expanded the Devnet guide and testing/security docs with setup,
+  scope, limits, cleanup, secret-handling, and actual validation outcomes.
+- [existing local work] The stake-activation compatibility fix remains
+  uncommitted and unpushed; preserve it with this task.
 
 ## Constraints and decisions
 
-- Keep shell startup fast; `status` is the explicit RPC refresh.
-- Do not treat an RPC failure as zero or combine liquid balances with stake or
-  lending positions. Jupiter Lend is not queried on devnet.
-- Keep exact integer monetary values and stable command JSON fields; status
-  additions are additive and transaction summaries affect human output only.
-- Keep transaction validation, simulation, confirmation, signing, and broadcast
-  order unchanged. Progress text must not contaminate JSON output.
-- Docker image E2E runs in GitHub Actions as well as the local Docker daemon.
+- Keep mock-RPC Docker E2E as the PR gate; Devnet public RPC/faucet availability
+  is not deterministic and the live workflow does not run on pull requests.
+- Verify the official Devnet genesis before faucet requests, signing, or CLI
+  writes. Never submit test writes to Mainnet.
+- Smoke wallets and token fixtures are generated in a temporary directory.
+  Jupiter Lend remains mainnet-only; only its Devnet guard is tested live.
+- Full native stake coverage spans epochs and requires the optional protected
+  Devnet key secret. Advance at most one safe lifecycle step per invocation.
+- Do not retry a faucet transaction when its result is unknown. The public
+  faucet returned a 429 during local validation; use a configured dedicated
+  Devnet RPC provider or wait for the faucet limit to clear.
+- User has now requested a commit and push; keep the scope to the changes
+  listed in this plan and monitor the resulting GitHub Actions run.
 
-## Validation completed
+## Validation
 
-- `npm test`: 62 tests across 15 files pass locally and in the Docker build.
-- `npm run lint`, `npm run build`, and `npm run format:check`: pass.
-- `python3 -m black --check test/e2e` and `git diff --check`: pass.
-- `docker build --platform linux/amd64 -t sol-wallet:ux-review .`: passes.
-- `SOL_WALLET_E2E_IMAGE=sol-wallet:ux-review python3 test/e2e/run_tests.py`:
-  all 14 Docker E2E tests passed.
-- `docker run --rm sol-wallet:ux-review --help`: passed with clean help output.
-- GitHub Actions run `36275799426` for `6e5f0c4` passed npm installation,
-  formatting, all 62 unit tests, build, linux/amd64 image build, all 14 Docker
-  E2E tests, GHCR authentication, and publication of the exact tested image.
+- 65 unit tests passed; TypeScript lint and build passed.
+- Linux/amd64 Docker image build passed; all 16 Docker E2E tests passed,
+  including tests that the proxy retains no signed transaction payload and
+  that an HTTP 429 does not trigger an airdrop retry.
+- Prettier, Black, Python compilation, and Node syntax checks passed after the
+  final no-retry edit.
+- Live Devnet genesis verification passed. Two faucet attempts failed at setup
+  (first RPC internal error; second HTTP 429); no CLI command transaction was
+  submitted. See [the Devnet validation record](docs/devnet-e2e-plan.md).
+- GitHub workflow has not run yet; the requested push is pending.
+- GitHub public status reported all selected components operational before
+  pushing.
+
+## Remaining
+
+- Re-run live smoke after faucet availability or a protected provider is
+  configured; then record the actual outcome here and in `docs/`.
+- Run the optional cross-epoch lifecycle only after the dedicated Devnet-only
+  secret is configured; its completion requires later scheduled/manual runs.

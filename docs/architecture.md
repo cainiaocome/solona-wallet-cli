@@ -55,7 +55,7 @@ adapter knows those types, but it cannot unlock the keystore by itself.
 | `src/wallet/store.ts`                  | UUID keystores, public registry, and writer lock     | How are aliases mapped safely to keys?               |
 | `src/wallet/signer.ts`                 | Lazy keystore unlock and transaction signing         | When can the private key be used?                    |
 | `src/integrations/jupiter-lend/`       | Legacy SDK isolation and instruction conversion      | Where is Jupiter-specific code?                      |
-| `src/integrations/stake-activation.ts` | RPC-derived stake activation state                   | How does the CLI know cooldown has finished?         |
+| `src/integrations/stake-activation.ts` | Client-side stake activation calculation             | How does the CLI know cooldown has finished?         |
 | `src/output/`                          | Human output, JSON conversion, redaction             | How are results and errors printed?                  |
 | `test/unit/`                           | Offline deterministic tests                          | What can be tested without a network?                |
 | `test/e2e/`                            | Docker/PTTY/mock-RPC tests                           | Does the packaged image behave correctly?            |
@@ -131,11 +131,12 @@ legacy SPL Token Program, six decimals, and the minimum of user-supplied assets
 and protocol-reported liquidity. Do not move those checks into a generic
 command helper where another asset could bypass them.
 
-The `stake-activation` integration asks the configured Solana RPC for stake
-activation state. It does not infer that a stake is fully inactive merely
-because its deactivation epoch has passed. Solana currently marks this RPC
-method deprecated, so an endpoint error blocks the operation rather than
-falling back to an epoch guess.
+The `stake-activation` integration calculates stake activation locally from
+the account, current epoch, and StakeHistory sysvar, using Anza's client-side
+implementation. It does not call Agave's removed `getStakeActivation` RPC or
+infer that a stake is fully inactive merely because its deactivation epoch has
+passed. Errors fetching or decoding the required inputs still block
+safety-critical stake actions rather than falling back to an epoch guess.
 
 ## Configuration flow
 

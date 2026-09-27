@@ -1,0 +1,65 @@
+name: Devnet E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_stake_lifecycle:
+        description: Advance one step of the resumable Devnet stake lifecycle
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: "17 5 * * 3,6"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devnet-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  devnet-e2e:
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+    timeout-minutes: 35
+    env:
+      NPM_CONFIG_MIN_RELEASE_AGE: "7"
+      SOL_WALLET_E2E_IMAGE: sol-wallet:devnet-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Verify npm supply-chain policy
+        run: test "$(npm config get min-release-age)" = "7"
+      - run: npm ci --legacy-peer-deps
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      - name: Build the exact image under test
+        run: docker build --platform linux/amd64 -t "$SOL_WALLET_E2E_IMAGE" .
+      - name: Check and install Python E2E tooling
+        run: |
+          python3 -m pip install --disable-pip-version-check --no-cache-dir pexpect black==25.1.0
+          python3 -m black --check test/e2e
+      - name: Run real-chain Devnet smoke tests
+        env:
+          SOL_WALLET_DEVNET_RPC_URL: ${{ secrets.SOL_WALLET_DEVNET_RPC_URL }}
+        run: python3 test/e2e/run_devnet_e2e.py
+      - name: Advance the resumable Devnet native-stake lifecycle
+        if: ${{ (github.event_name == 'schedule' || inputs.run_stake_lifecycle) && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+        env:
+          SOL_WALLET_DEVNET_LIFECYCLE_KEYPAIR_JSON: ${{ secrets.SOL_WALLET_DEVNET_LIFECYCLE_KEYPAIR_JSON }}
+          SOL_WALLET_DEVNET_RPC_URL: ${{ secrets.SOL_WALLET_DEVNET_RPC_URL }}
+        run: |
+          if [[ -z "${SOL_WALLET_DEVNET_LIFECYCLE_KEYPAIR_JSON:-}" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
+              echo "Stake lifecycle not configured; smoke suite passed and lifecycle step is skipped."
+              exit 0
+            fi
+            echo "::error::Configure SOL_WALLET_DEVNET_LIFECYCLE_KEYPAIR_JSON to run the lifecycle."
+            exit 1
+          fi
+          python3 test/e2e/run_devnet_lifecycle.py

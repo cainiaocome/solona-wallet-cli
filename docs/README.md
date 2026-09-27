@@ -21,6 +21,8 @@ read the documents in this order:
    the Docker image.
 8. [Supply-chain controls](supply-chain.md) — how the lockfile, release-age
    policy, CI, Docker build, and dependency updates work together.
+9. [Devnet E2E guide](devnet-e2e-plan.md) — real-chain command coverage,
+   Devnet setup/safety, workflow operation, and resumable native-stake tests.
 
 The more focused reference documents are also useful:
 

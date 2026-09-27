@@ -49,7 +49,7 @@ class Handler(BaseHTTPRequestHandler):
         if method == "getBalance":
             result = {"context": {"slot": 100}, "value": 10_000_000_000}
         elif method == "getGenesisHash":
-            result = "GH7ome3EiwEr7tu9JuTh2dpYWBJK3z69Xm1ZE3MEE6JC"
+            result = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
         elif method == "getTokenAccountsByOwner":
             owner = params[0]
             result = {

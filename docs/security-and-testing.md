@@ -28,7 +28,7 @@ this document before putting any value on an address controlled by it.
   JSON byte-array key encodings.
 - Before creating a transaction, writes compare the RPC endpoint's genesis
   hash to the selected mainnet or devnet cluster.
-- Stake withdrawal checks both RPC-reported activation state and any configured
+- Stake withdrawal checks the calculated on-chain activation state and any configured
   time/epoch lockup before building the instruction.
 - The runtime image runs as a non-root `solwallet` user.
 
@@ -44,9 +44,13 @@ this document before putting any value on an address controlled by it.
   transaction. Address syntax validation is not identity verification.
 - Simulation cannot guarantee future success because chain state can change.
 - A confirmation timeout does not prove that a transaction failed.
-- Stake activation lookup currently uses Solana's deprecated
-  `getStakeActivation` RPC. If a provider removes that method, stake listing
-  and withdrawal checks fail closed instead of guessing that funds are free.
+- Stake activation is calculated client-side from the stake account, current
+  epoch, and StakeHistory sysvar using Anza's maintained implementation. It
+  uses standard account/epoch RPC methods instead of the removed
+  `getStakeActivation` endpoint. If those inputs cannot be fetched or decoded,
+  stake listing and withdrawal checks fail closed rather than guessing that
+  funds are free. A regression test makes the mock endpoint reject the removed
+  method while confirming activation still works through supported RPC calls.
 - Protocol risk, smart-contract bugs, validator behavior, token authorities,
   and market risk are outside the wallet's control.
 
@@ -94,6 +98,16 @@ transactions.
 The source test command does not prove that a Docker image works. The image
 has a separate build and E2E path.
 
+Network-facing CLI behavior also has a separate real-chain suite in
+[the Devnet E2E guide](devnet-e2e-plan.md). It runs on a schedule or manually,
+not on every pull request: it uses a faucet and submits disposable SOL and
+token transactions. It verifies cluster genesis before funding and signing,
+uses fresh temporary wallets, and checks resulting chain state. Dry-runs,
+cancellations, unsupported integrations, and rejected stake states assert that
+no transaction was broadcast. A separate optional runner advances a real
+native stake account across epoch windows and requires a dedicated Devnet-only
+GitHub Actions secret. Never configure a Mainnet key for these tests.
+
 ## Docker E2E and GitHub Actions
 
 The repository's Docker workflow performs these gates in order:
@@ -116,6 +130,16 @@ checks wallet B is the fee payer, and verifies each Ed25519 signature against
 B's public key. Publication happens only after all gates pass. Pull requests
 run the gates but do not publish; pushes to the main branch and version tags
 publish according to `.github/workflows/docker.yml`.
+
+The separate `.github/workflows/devnet-e2e.yml` workflow runs twice weekly and
+supports manual dispatch from the default branch. It uses public Devnet unless
+the optional `SOL_WALLET_DEVNET_RPC_URL` Actions secret selects a dedicated
+provider; that secret is passed only to live test steps. A persistent lifecycle
+key is exposed only to the optional lifecycle step on the default branch;
+scheduled runs skip that step when the key secret is not configured. Read
+[the Devnet E2E guide](devnet-e2e-plan.md) before enabling it, since it can
+submit a real Devnet stake transaction and leave an account while it warms up
+or cools down.
 
 Branch pushes publish `latest`, the branch name, and the bare seven-character
 commit hash. For example, a master push publishes `master` and `abc1234`
