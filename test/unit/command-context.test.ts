@@ -307,11 +307,16 @@ describe("command-scoped wallet and output context", () => {
       );
       context.readPassphrase = async () => wallet.passphrase;
       const submitted: string[] = [];
+      const accountInfoConfigs: unknown[] = [];
       context.getClient = () =>
         ({
           rpc: {
-            getAccountInfo: () =>
-              request({ value: { owner: "11111111111111111111111111111111" } }),
+            getAccountInfo: (_account: string, config: unknown) => {
+              accountInfoConfigs.push(config);
+              return request({
+                value: { owner: "11111111111111111111111111111111" },
+              });
+            },
             getLatestBlockhash: () =>
               request({
                 value: {
@@ -353,6 +358,10 @@ describe("command-scoped wallet and output context", () => {
         mockedLend.signerAddresses.length = 0;
         submitted.length = 0;
         await executeLine(context, `jupiter-lend ${action} 1 --yes --json`);
+        expect(accountInfoConfigs.at(-1)).toEqual({
+          commitment: "confirmed",
+          encoding: "base64",
+        });
         expect(mockedLend.signerAddresses).toEqual([wallet.address]);
         expect(submitted).toHaveLength(1);
         const wire = Buffer.from(submitted[0]!, "base64");

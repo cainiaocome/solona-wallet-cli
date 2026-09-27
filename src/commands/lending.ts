@@ -182,6 +182,9 @@ async function runLendInstruction(
   const destinationInfo = await rpcRequest(
     context.getClient().rpc.getAccountInfo(destination, {
       commitment: context.config.commitment,
+      // Token accounts contain 165 bytes; Kit's omitted-encoding overload
+      // requests legacy base58, which the RPC rejects above 129 bytes.
+      encoding: "base64",
     }),
     "Jupiter Lend destination token account lookup",
   );

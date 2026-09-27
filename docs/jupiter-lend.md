@@ -39,6 +39,12 @@ The SDK line uses legacy `@solana/web3.js` and `bn.js` types. Those imports are 
 
 The adapter uses the official SDK's position/account derivation. The command layer may add an idempotent associated-token-account instruction for the Jupiter receipt token on deposit or the USDC destination on withdrawal. It does not hand-author Jupiter protocol instructions.
 
+Before building a write, the command checks whether that destination token
+account already exists. This lookup explicitly requests base64: an SPL token
+account contains 165 bytes, while the Solana Kit legacy default is base58 and
+cannot return account data larger than 129 bytes. This matters on repeat
+deposits, because the receipt-token account was created by the first deposit.
+
 The pinned non-prerelease SDK exposes the basic Earn deposit/withdraw/redeem builders used here, but does not export the newer slippage-bounded instruction helpers. v0.2 therefore records the limitation explicitly and relies on the common simulation, explicit confirmation, and blockhash-aware confirmation pipeline; a future SDK refresh should adopt protected variants when their stable API is available.
 
 ## Read behavior

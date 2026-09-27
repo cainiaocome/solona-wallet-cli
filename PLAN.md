@@ -2,6 +2,15 @@
 
 ## Current task
 
+- Fix repeated Jupiter Lend deposits failing during destination token-account
+  lookup because the pinned Kit RPC overload defaults to base58 without an
+  explicit encoding.
+- Add a regression assertion for explicit base64 on deposit and withdrawal;
+  document why the existing receipt-token account requires it.
+- Validate, format, commit, and push as requested. No live Mainnet transaction.
+
+## Prior review remediation checkpoint
+
 - Complete checkpoint `ac77a3a`: consolidated specifications and saved the
   review findings before fixes, per user instruction.
 - Complete: fixed all ten review findings, including transaction
