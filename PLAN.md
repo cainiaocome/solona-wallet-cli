@@ -29,8 +29,11 @@ push to `master`, and confirm GitHub Actions passes.
   Python/Bash checks; Linux/amd64 image build; all 21 Docker/Python E2E tests.
 - [complete] Added a mocked ambiguous stake-create regression proving the local
   hint is saved before broadcast and the error carries signature/address data.
-- [in progress] Final diff review, commit/push to `master`, monitor Actions, and
-  record the actual workflow result in `docs/`.
+- [complete] Commit `6aecce0` pushed to `master`; GitHub Actions run
+  [36361947729](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36361947729)
+  passed every gate and published the tested image.
+- [in progress] Commit/push the documentation update recording the completed
+  Actions run, then verify its workflow.
 
 ## Decisions and constraints
 

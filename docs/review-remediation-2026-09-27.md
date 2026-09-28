@@ -140,8 +140,11 @@ Final local validation completed before commit:
 
 The final run includes the stake-create regression proving the local recovery
 hint is present before the fake broadcast fails and that the error preserves
-signature/address context. GitHub Actions status is pending push; its URL and
-result will be recorded after the workflow completes. No Mainnet transaction
-or real-chain write was part of this remediation. The dedicated chain-writing
-tests remain isolated to Devnet, verify the expected genesis hash, and use
-disposable test wallets. No system packages were installed.
+signature/address context. Implementation commit `6aecce0` was pushed to
+`master`; [GitHub Actions run
+36361947729](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36361947729)
+passed dependency, format, test, build, Docker E2E, and GHCR publication gates.
+The image built from the exact tested commit was published. No Mainnet
+transaction or real-chain write was part of this remediation. The dedicated
+chain-writing tests remain isolated to Devnet, verify the expected genesis
+hash, and use disposable test wallets. No system packages were installed.
