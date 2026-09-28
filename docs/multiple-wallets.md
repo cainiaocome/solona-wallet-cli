@@ -113,6 +113,73 @@ This only changes the local nickname. The encrypted keystore filename, public
 address, passphrase, current selection, default selection, and chain state do not
 change. You can rename the selected wallet without re-importing it.
 
+## Delete a local wallet
+
+`wallet delete` removes a wallet from this computer's active registry and
+deletes its managed UUID-named encrypted keystore:
+
+```text
+wallet delete savings
+```
+
+The command shows the full public address and asks for confirmation. The default
+answer is no. For a deliberate script or one-shot invocation, `--yes` skips
+that prompt:
+
+```text
+sol-wallet -c "wallet delete savings --yes" --json
+```
+
+Without a TTY, `--yes` is required. Deleting the saved default while other
+wallets remain is refused; first choose a replacement with
+`wallet default <another-alias>`. Deleting the last wallet is allowed. If the
+deleted wallet was selected in the current shell, that shell becomes
+unselected—no other wallet is silently selected.
+
+This is a local key-store operation, not an on-chain operation. It does not
+transfer or delete SOL, tokens, native stake, or lending positions. Check the
+wallet's balances and positions first, and retain a secure backup of the
+original private key if you may need to control those assets later. The command
+does not contact an RPC because an RPC balance check cannot prove that every
+asset or protocol position has been found.
+
+The active UUID keystore is removed, but separate recovery material is kept:
+the old root `keystore.json` from a migration, if present, and local
+stake-account recovery hints are not deleted. Their presence does not mean the
+wallet is still registered. `wallet delete` is not secure erasure; filesystem
+snapshots, backups, and storage hardware may retain old bytes.
+Stake hints stay under the deleted wallet's UUID and are not automatically
+attached if you later import the same key as a new wallet; keep the original
+UUID keystore backup if you want to recover that exact association.
+
+The registry update is the deletion's logical commit. If the process cannot
+remove the encrypted UUID file afterward, the command reports partial
+completion and `wallet list` shows the remaining file as an unregistered
+orphan. Review it before choosing `wallet recover` or removing that exact file.
+
+## Change a wallet's passphrase
+
+Use the wallet alias to change the encryption passphrase for any registered
+wallet, even if it is not the current wallet:
+
+```text
+wallet change-passphrase savings
+```
+
+The CLI privately prompts for the current passphrase, then the new passphrase
+twice. Passphrases are never command arguments. A wrong current passphrase, an
+empty or mismatched new passphrase, or a changed keystore snapshot leaves the
+existing keystore untouched. The new encrypted file is verified before an
+atomic replacement. The wallet UUID, address, alias, current selection, and
+saved default do not change. This does not rotate the Solana private key.
+
+Update your backups after changing a passphrase. Existing backup files are not
+rewritten and continue to require the old passphrase. For a migrated wallet,
+the retained root `keystore.json` is also a separate backup and keeps its old
+passphrase. The change command requires an interactive TTY for hidden input and
+does not contact Solana. Because the command name contains the word
+`passphrase`, the conservative history filter does not save that command line.
+
 ## Where wallet data lives
 
 The default directory is `~/.config/sol-wallet`; Docker users should keep the
@@ -133,7 +200,8 @@ UUID filenames are stable identifiers, not private keys. Aliases are stored in
 `wallets.json` and never used as filesystem paths. The registry does not contain
 the encrypted private-key payload. Each keystore contains its public address and
 encrypted key material, using Argon2id and AES-256-GCM. The passphrase is needed
-to sign, migrate the legacy wallet, or register a recovered encrypted key.
+to sign, migrate the legacy wallet, register a recovered encrypted key, or
+change the local encryption passphrase.
 Listing, selecting, renaming, status, balances, and other public reads do not
 unlock it.
 
@@ -197,11 +265,14 @@ remove only that stale lock directory after confirming no writer is running.
 Then use `wallet list` and the recovery instructions above to inspect the data.
 Never delete `wallets/` or `wallets.json` as a way to clear a lock.
 
-An interrupted import can also leave hidden `.import-*.tmp` or `.recovery-*.tmp`
-files inside `wallets/`. They contain encrypted keystore data and are not
-registered wallets. Preserve them until the registry and every UUID file have
-been checked; if you decide to clean them, stop all writers and move only the
-specific stale temporary file to a secure quarantine before deleting it.
+An interrupted import, recovery, or passphrase change can also leave hidden
+`.import-*.tmp`, `.recovery-*.tmp`, or `.passphrase-*.tmp` files inside
+`wallets/`. They contain encrypted keystore data and are not registered
+wallets. A passphrase-change temporary file may use the new passphrase even
+though the original UUID file still uses the old one. Preserve temporary files
+until the registry and every UUID file have been checked; if you decide to
+clean one, stop all writers and move only that exact stale file to a secure
+quarantine before deleting it.
 
 ## JSON and automation
 

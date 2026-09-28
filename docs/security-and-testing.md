@@ -20,8 +20,15 @@ this document before putting any value on an address controlled by it.
 - The keystore reader rejects unknown fields, so plaintext key data cannot be
   silently carried alongside the encrypted payload.
 - New keystores are written to a unique temporary file, synced, and published
-  under a UUID with create-only hard-link semantics and mode `0600`. Existing
-  keystores are not overwritten; registry changes are locked and atomic.
+  under a UUID with create-only hard-link semantics and mode `0600`. The one
+  intentional replacement path is passphrase rotation: it verifies the old
+  secret and replacement encryption, rechecks the wallet and exact original
+  bytes under the store lock, then atomically renames the new encrypted file.
+- `wallet delete` removes only the active registry entry and its managed UUID
+  keystore. It requires confirmation or explicit `--yes`, refuses to delete a
+  saved default while other wallets remain, and clears the current session
+  selection instead of switching to another wallet. It does not contact RPC or
+  change chain state; legacy backups and local stake hints are preserved.
 - A signer is created only after validation, simulation, and confirmation.
 - Secret-bearing command words, validated 64-byte keypairs, raw hex, and
   JSON-byte-array key material are filtered from shell history. Public
@@ -42,6 +49,10 @@ this document before putting any value on an address controlled by it.
 
 - A compromised operating system can read input, files, or process memory.
 - JavaScript garbage collection does not guarantee perfect memory zeroization.
+- File deletion is not secure erasure. Filesystem snapshots, backups, storage
+  wear-leveling, and copies of a keystore may retain the old encrypted bytes.
+- Passphrase rotation does not update existing backups. A migrated legacy
+  `keystore.json` recovery copy also keeps its prior passphrase.
 - A weak or reused passphrase weakens local protection.
 - A person with the original private key can control the wallet even without
   this keystore.
@@ -102,7 +113,12 @@ git diff --check
 behavior, history filtering, keystore encryption and tamper detection, stake
 instruction layout and wallet/network registry isolation, signer binding, JSON
 line framing and errors, wallet recovery and writer contention, and other
-deterministic boundaries. Jupiter command tests use deterministic adapter
+deterministic boundaries. Wallet lifecycle tests cover default/current
+selection rules, confirmation requirements, passphrase verification and
+rotation, failed-change preservation, concurrent keystore replacement, and
+recovery-artifact retention. Docker/PTTY tests exercise the commands through
+the packaged image and verify that passphrases never enter history or RPC
+requests. Jupiter command tests use deterministic adapter
 instructions and verify that the selected wallet signs deposit and withdrawal
 transactions. Token-send Docker E2E covers both missing and existing
 associated token accounts. Its mock RPC rejects a data query without base64
@@ -111,6 +127,19 @@ constraint deterministically.
 
 The source test command does not prove that a Docker image works. The image
 has a separate build and E2E path.
+
+For the wallet deletion and passphrase-rotation changes on 2026-09-28, the
+offline suite passed all 95 tests across 20 files; TypeScript lint/build,
+Prettier, Black for all 11 Python E2E files, and `git diff --check` also passed.
+The `linux/amd64` image built successfully and all 21 packaged Docker/PTTY E2E
+tests passed against that image. The lifecycle E2E asserted that these two
+commands make no RPC calls. No Devnet or Mainnet transaction was submitted.
+
+The image build did print environment/tooling warnings: the classic Docker
+builder is deprecated, npm reported peer/install-script warnings, and its
+dependency audit reported 15 findings (8 moderate, 7 high). This change did not
+modify dependencies or attempt to resolve those findings; they did not block
+the build or tests.
 
 Network-facing CLI behavior also has a separate real-chain suite in
 [the Devnet E2E guide](devnet-e2e-plan.md). It runs on a schedule or manually,

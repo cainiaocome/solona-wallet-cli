@@ -245,6 +245,11 @@ During the resumable stake lifecycle, compare each displayed
 `validatorVoteAccount` with `getAccountInfo(jsonParsed)`'s
 `data.parsed.info.stake.delegation.voter` for the same stake account.
 
+`wallet delete` and `wallet change-passphrase` are local-only operations. The
+packaged Docker/PTTY suite covers delete confirmation and `--yes`, default and
+current selection behavior, passphrase rotation/failure, recovery-artifact
+retention, and the absence of RPC calls. They do not need Devnet writes.
+
 For every command that supports both formats, check human and JSON output.
 For every write, assert network/wallet/amount/destination/validator/fee in
 preflight, simulation before signing, confirmation behavior, confirmed receipt,

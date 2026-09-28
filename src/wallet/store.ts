@@ -29,7 +29,7 @@ import {
   walletRegistryPath,
   type AppConfig,
 } from "../config/config.js";
-import { readKeystoreFile } from "./keystore.js";
+import { readKeystoreFile, type KeystoreFile } from "./keystore.js";
 import { WalletStoreError } from "../errors/errors.js";
 
 const uuidSchema = z
@@ -707,9 +707,175 @@ export async function readRawKeystore(pathname: string): Promise<Buffer> {
         "Encrypted keystore must have mode 0600; run chmod 600 on the file.",
       );
     return await readFile(pathname);
-  } catch {
+  } catch (error) {
+    if (error instanceof WalletStoreError) throw error;
     storeError("WalletStoreInvalid", "Unable to read encrypted keystore.");
   }
+}
+
+export type WalletKeystoreRemoval =
+  | "removed"
+  | "already-missing"
+  | "retained"
+  | "durability-uncertain";
+
+export async function deleteRegisteredWallet(
+  configDir: string,
+  expected: Pick<WalletEntry, "id" | "alias" | "address">,
+): Promise<{
+  entry: WalletEntry;
+  registry: WalletRegistry;
+  keystore: WalletKeystoreRemoval;
+}> {
+  validateWalletId(expected.id);
+  validateAlias(expected.alias);
+  return withStoreLock(configDir, async () => {
+    const current = await readRegistry(configDir);
+    const entry = current.wallets.find((wallet) => wallet.id === expected.id);
+    if (
+      !entry ||
+      entry.alias !== expected.alias ||
+      entry.address !== expected.address
+    )
+      storeError(
+        "WalletChanged",
+        "The wallet changed while deletion was being confirmed. Run `wallet list` and retry.",
+        2,
+      );
+    if (current.defaultWalletId === entry.id && current.wallets.length > 1)
+      storeError(
+        "WalletIsDefault",
+        `Wallet '${entry.alias}' is the saved default. Run \`wallet default <another-alias>\` before deleting it.`,
+        2,
+      );
+
+    const directory = walletDirectoryPath(configDir);
+    await ensureManagedDirectory(directory);
+    const keystorePath = walletKeystorePath(configDir, entry.id);
+    let fileExists = false;
+    try {
+      const metadata = await lstat(keystorePath);
+      if (!metadata.isFile() || metadata.isSymbolicLink())
+        storeError(
+          "WalletStoreInvalid",
+          "Refusing to delete a wallet whose keystore path is not a regular file.",
+        );
+      fileExists = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+
+    const registry: WalletRegistry = {
+      version: 1,
+      defaultWalletId:
+        current.defaultWalletId === entry.id ? null : current.defaultWalletId,
+      wallets: current.wallets.filter((wallet) => wallet.id !== entry.id),
+    };
+    // This is the logical commit point. If file removal is interrupted, the
+    // remaining UUID keystore is an inspectable orphan rather than a registry
+    // entry that points at a missing key.
+    await writeRegistryAtomic(configDir, registry);
+    if (!fileExists)
+      return { entry, registry, keystore: "already-missing" as const };
+
+    try {
+      await unlink(keystorePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT")
+        return { entry, registry, keystore: "already-missing" as const };
+      return { entry, registry, keystore: "retained" as const };
+    }
+    try {
+      await syncDirectory(directory);
+      return { entry, registry, keystore: "removed" as const };
+    } catch {
+      return {
+        entry,
+        registry,
+        keystore: "durability-uncertain" as const,
+      };
+    }
+  });
+}
+
+/** Atomically rotate one registered UUID keystore after rechecking its snapshot. */
+export async function replaceWalletKeystore(
+  configDir: string,
+  expected: Pick<WalletEntry, "id" | "alias" | "address">,
+  expectedBytes: Uint8Array,
+  replacement: KeystoreFile,
+): Promise<void> {
+  validateWalletId(expected.id);
+  validateAlias(expected.alias);
+  if (replacement.publicKey !== expected.address)
+    storeError(
+      "WalletStoreInvalid",
+      "Replacement keystore address does not match the wallet registry.",
+    );
+
+  await withStoreLock(configDir, async () => {
+    const registry = await readRegistry(configDir);
+    const entry = registry.wallets.find((wallet) => wallet.id === expected.id);
+    if (
+      !entry ||
+      entry.alias !== expected.alias ||
+      entry.address !== expected.address
+    )
+      storeError(
+        "WalletChanged",
+        "The wallet changed while its passphrase was being updated. Retry the command.",
+        2,
+      );
+
+    const directory = walletDirectoryPath(configDir);
+    await ensureManagedDirectory(directory);
+    const target = walletKeystorePath(configDir, expected.id);
+    const currentBytes = await readRawKeystore(target);
+    if (!currentBytes.equals(Buffer.from(expectedBytes)))
+      storeError(
+        "WalletChanged",
+        "The keystore changed while its passphrase was being updated. No changes were made; retry the command.",
+        2,
+      );
+
+    const temporary = path.join(
+      directory,
+      `.passphrase-${expected.id}-${randomBytes(12).toString("hex")}.tmp`,
+    );
+    let replaced = false;
+    try {
+      await writeFilePrivate(temporary, replacement);
+      await chmod(temporary, 0o600);
+      const staged = await readKeystoreFile(temporary);
+      if (!staged || staged.publicKey !== expected.address)
+        storeError(
+          "WalletStoreInvalid",
+          "The staged encrypted keystore failed its public-address check.",
+        );
+
+      const latestBytes = await readRawKeystore(target);
+      if (!latestBytes.equals(Buffer.from(expectedBytes)))
+        storeError(
+          "WalletChanged",
+          "The keystore changed before passphrase update. No changes were made; retry the command.",
+          2,
+        );
+      await rename(temporary, target);
+      replaced = true;
+      await syncDirectory(directory);
+    } catch (error) {
+      await unlink(temporary).catch(() => undefined);
+      if (error instanceof WalletStoreError) throw error;
+      throw new WalletStoreError(
+        "WalletStoreWriteError",
+        replaced
+          ? "The new keystore may already be active, but its directory sync failed. Try the new passphrase and inspect `wallet info` before retrying."
+          : "Unable to replace the keystore; the previous passphrase remains active.",
+        1,
+        error,
+      );
+    }
+  });
 }
 
 export async function registerExistingKeystore(

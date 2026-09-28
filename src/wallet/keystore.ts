@@ -285,15 +285,28 @@ export async function readKeystoreFile(
 ): Promise<KeystoreFile | null> {
   try {
     const raw = await readFile(filePath, "utf8");
-    const parsed = keystoreSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success)
-      throw new KeystoreError("The keystore file is malformed.");
-    return parsed.data;
+    return parseKeystoreFile(raw);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     if (error instanceof KeystoreError) throw error;
     throw new KeystoreError("Unable to read keystore.");
   }
+}
+
+/** Parse one immutable keystore snapshot without reopening its pathname. */
+export function parseKeystoreFile(raw: string | Uint8Array): KeystoreFile {
+  let value: unknown;
+  try {
+    value = JSON.parse(
+      typeof raw === "string" ? raw : Buffer.from(raw).toString("utf8"),
+    );
+  } catch {
+    throw new KeystoreError("The keystore file is malformed.");
+  }
+  const parsed = keystoreSchema.safeParse(value);
+  if (!parsed.success)
+    throw new KeystoreError("The keystore file is malformed.");
+  return parsed.data;
 }
 
 /** Create an encrypted keystore at an exact target without replacing a file. */

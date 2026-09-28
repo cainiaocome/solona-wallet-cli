@@ -1,6 +1,7 @@
 const HELP: Record<string, string> = {
   "": `Commands:
   wallet import <alias> | wallet list | wallet info [alias] | wallet use <alias> | wallet default <alias> | wallet rename <old> <new>
+  wallet delete <alias> [--yes] | wallet change-passphrase <alias>
   wallet migrate <alias> | wallet recover <uuid> <alias>
   address | balance
   send <destination> <amount>
@@ -22,11 +23,14 @@ wallet info [<alias>]
 wallet use <alias>                 (current process only)
 wallet default <alias>             (future processes)
 wallet rename <old> <new>
+wallet delete <alias> [--yes]       (local keystore only; --yes skips confirmation)
+wallet change-passphrase <alias>   (hidden prompts; old and new passphrases)
 wallet migrate <alias>             (existing keystore.json)
 wallet recover <uuid> <alias>      (orphan UUID keystore)
 
 Use --wallet <alias> at startup to select a wallet for one process.
-Aliases are local names; transactions always show and use the full address.`,
+Aliases are local names; transactions always show and use the full address.
+Deleting a wallet never removes chain assets. Separate backups and stake recovery hints remain.`,
   show: "show config",
   address:
     "address\nShows the selected wallet address without unlocking the keystore.",

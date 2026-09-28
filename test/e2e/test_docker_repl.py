@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 from pathlib import Path
 import shutil
@@ -72,6 +73,8 @@ class DockerReplTests(unittest.TestCase):
         server = start_server()
         port = server.server_address[1]
         directory = Path(tempfile.mkdtemp(prefix="sol-wallet-import-"))
+        Handler.state.methods.clear()
+        Handler.state.transactions.clear()
         fixture = Path(__file__).parents[1] / "fixtures" / "disposable-keypair.json"
         shutil.copyfile(fixture, directory / "keypair.json")
         secondary_address = write_keypair(directory / "keypair-secondary.json")
@@ -108,6 +111,12 @@ class DockerReplTests(unittest.TestCase):
             child.expect("Confirm passphrase:")
             child.sendline("secondary test passphrase")
             child.expect("Wallet 'secondary' imported")
+            registry = json.loads((directory / "wallets.json").read_text())
+            vault_id = next(
+                wallet["id"]
+                for wallet in registry["wallets"]
+                if wallet["alias"] == "secondary"
+            )
             for wallet_file in (directory / "wallets").glob("*.json"):
                 self.assertNotIn("secondary test passphrase", wallet_file.read_text())
             child.sendline("wallet list")
@@ -149,6 +158,59 @@ class DockerReplTests(unittest.TestCase):
             child.expect("Stake delegation confirmed")
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
+            # Passphrase rotation is local-only. The UUID/address remain stable,
+            # the old phrase stops unlocking this keystore, and the new one signs.
+            methods_before_rotation = len(Handler.state.methods)
+            child.sendline("wallet change-passphrase vault")
+            child.expect("Passphrase for vault")
+            child.sendline("secondary test passphrase")
+            child.expect("New passphrase for vault:")
+            child.sendline("rotated wallet passphrase")
+            child.expect("Confirm new passphrase:")
+            child.sendline("rotated wallet passphrase")
+            child.expect("Passphrase changed for wallet 'vault'")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
+            self.assertEqual(len(Handler.state.methods), methods_before_rotation)
+
+            child.sendline("send 11111111111111111111111111111112 1 --yes")
+            child.expect("Passphrase for vault")
+            child.sendline("secondary test passphrase")
+            child.expect("Unable to unlock keystore")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
+            self.assertEqual(len(Handler.state.transactions), 3)
+
+            child.sendline("send 11111111111111111111111111111112 1 --yes")
+            child.expect("Passphrase for vault")
+            child.sendline("rotated wallet passphrase")
+            child.expect("SOL transfer confirmed")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
+
+            methods_before_cancelled_delete = len(Handler.state.methods)
+            child.sendline("wallet delete vault")
+            child.expect("Delete local wallet 'vault'")
+            child.sendline("n")
+            child.expect("Wallet deletion cancelled.")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
+            self.assertEqual(
+                len(Handler.state.methods), methods_before_cancelled_delete
+            )
+
+            # A saved default cannot be removed while another wallet remains.
+            child.sendline("wallet delete primary --yes")
+            child.expect("is the saved default")
+            child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
+
+            # Delete the current wallet by explicit automation consent. This is
+            # local-only and leaves the chain stake hint intact for recovery.
+            methods_before_delete = len(Handler.state.methods)
+            child.sendline("wallet delete vault --yes")
+            child.expect("Wallet 'vault' removed from this local wallet store")
+            child.expect(r"sol-wallet \[devnet \| no-wallet\]>")
+            self.assertEqual(len(Handler.state.methods), methods_before_delete)
+            child.sendline("wallet list")
+            child.expect("primary")
+            child.expect(r"sol-wallet \[devnet \| no-wallet\]>")
+
             child.send("stake ")
             child.send("\t\t")
             child.expect("create")
@@ -157,9 +219,24 @@ class DockerReplTests(unittest.TestCase):
             child.expect(pexpect.EOF)
             child.close()
             self.assertEqual(child.exitstatus, 0)
-            self.assertEqual(len(Handler.state.transactions), 3)
+            self.assertEqual(len(Handler.state.transactions), 4)
             for encoded_transaction in Handler.state.transactions:
                 assert_transaction_signed_by(encoded_transaction, secondary_address)
+            final_registry = json.loads((directory / "wallets.json").read_text())
+            self.assertEqual(
+                [wallet["alias"] for wallet in final_registry["wallets"]],
+                ["primary"],
+            )
+            self.assertEqual(
+                final_registry["defaultWalletId"], final_registry["wallets"][0]["id"]
+            )
+            self.assertFalse((directory / "wallets" / f"{vault_id}.json").exists())
+            self.assertTrue(
+                (directory / "stake-accounts" / vault_id / "devnet.json").exists()
+            )
+            history = (directory / "history").read_text()
+            self.assertNotIn("secondary test passphrase", history)
+            self.assertNotIn("rotated wallet passphrase", history)
         finally:
             if child.isalive():
                 child.close(force=True)

@@ -42,6 +42,7 @@ wallet info savings
 wallet use savings
 wallet default daily
 wallet rename daily checking
+wallet change-passphrase savings
 status
 address
 ```
@@ -52,6 +53,15 @@ transaction previews. `wallet use` changes only this process, while
 `wallet default` changes the choice for future processes. A one-shot command can
 choose explicitly with `sol-wallet --wallet savings -c "balance" --json`.
 See [the multiple-wallet guide](multiple-wallets.md) for recovery and migration.
+
+`wallet change-passphrase` privately asks for the current and replacement
+passphrases; it changes only local encryption. `wallet delete` confirms the
+alias and address before removing the active local keystore. Neither command
+changes chain state. See the wallet guide before deleting a key: assets remain
+at their Solana address, while separate backups are intentionally preserved.
+To remove a non-default wallet interactively, run `wallet delete savings`; if
+it is current, the shell becomes unselected afterward. Deleting the default
+while another wallet remains requires setting a different default first.
 
 `status` checks the selected network's RPC and shows the selected wallet's SOL
 and non-zero token balances, plus separate native-stake and mainnet Jupiter

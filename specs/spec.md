@@ -3548,6 +3548,8 @@ to the existing alias and the rename command.
 | `wallet use <alias>`                            | Select a wallet for this process only.                                              |
 | `wallet default <alias>`                        | Save the startup default; leave the current selection unchanged.                    |
 | `wallet rename <old> <new>`                     | Change the alias without changing identity, keys, or selection.                     |
+| `wallet delete <alias> [--yes]`                 | Confirm local removal; never changes chain state. `--yes` skips confirmation.       |
+| `wallet change-passphrase <alias>`              | Hidden old/new passphrase prompts; re-encrypt the existing key atomically.          |
 | `wallet info [<alias>]`                         | Show local metadata for the specified wallet, or current wallet if omitted.         |
 | `wallet migrate <alias>`                        | Convert the legacy single-keystore installation explicitly.                         |
 | `wallet recover <uuid> <alias>`                 | Register an existing orphan encrypted keystore after passphrase verification.       |
@@ -3633,7 +3635,9 @@ never cause an arbitrary wallet to become selected automatically.
 
 Each wallet retains its own existing encryption format and passphrase. There
 is no shared master password, persistent unlock, or decrypted-key cache. Listing,
-switching, renaming, and viewing status do not require a passphrase.
+switching, renaming, deleting, and viewing status do not require a passphrase.
+Passphrase rotation verifies the old passphrase and re-encrypts the same private
+key; it does not rotate the Solana address.
 
 Resolve wallet identity once per command and pass that immutable selection to
 all handlers and the signer. Verify the registry address, keystore address,
@@ -3672,12 +3676,13 @@ be verified on the selected network before entering its scoped registry.
 ## Scope recommendations
 
 Include multiple imported wallets, aliases, selection/default behavior, status,
-identity-aware output, completion, migration, and isolation of existing features.
+identity-aware output, completion, migration, safe local deletion and passphrase
+rotation, and isolation of existing features.
 
 Defer wallet creation/seed phrases, hardware wallets, address-book recipient
-aliases, portfolio aggregation, and protocol additions. Also defer local wallet
-removal: deleting the only key copy deserves a separately reviewed recovery and
-confirmation design. Importing and renaming are enough for the initial release.
+aliases, portfolio aggregation, and protocol additions. Local wallet removal
+was deferred in the initial design and is now specified by the reviewed
+deletion contract in Part III.
 
 Watch-only wallets are a useful follow-up: they would store a public address
 without its private key, support reads, and reject signing. The initial release
@@ -3873,13 +3878,16 @@ arguments and flags before prompting or mutating files.
 | `wallet use <alias>`                            | Exactly one; select only for this process. Reject in `-c` mode with guidance to startup `--wallet`. Allowed in piped sessions. |
 | `wallet default <alias>`                        | Exactly one; save default, never switch current session.                                                                       |
 | `wallet rename <old> <new>`                     | Exactly two; same alias is a successful no-op.                                                                                 |
+| `wallet delete <alias> [--yes]`                 | Exactly one alias; confirmed local removal, `--yes` skips confirmation. Never changes chain state.                             |
+| `wallet change-passphrase <alias>`              | Exactly one alias; hidden old/new prompts and atomic re-encryption of the same key.                                            |
 | `wallet migrate <alias>`                        | Exactly one; migrate old single keystore as described below.                                                                   |
 | `wallet recover <uuid> <alias>`                 | Exactly two; register an existing unregistered UUID keystore after verification.                                               |
 | `status`                                        | No arguments; local context only, no balance/health RPC calls.                                                                 |
 
 `wallet recover` is the narrowly scoped recovery command needed for interrupted
 imports and registry loss. It does not accept external paths or plaintext keys.
-No delete/reset/force flags are part of this release.
+Local wallet deletion is limited to the explicit per-alias command below; there
+is no broad reset or force-delete operation.
 
 Validate alias syntax before file/key input. Check alias availability before
 prompts and recheck under the write lock. Check address duplication after key
@@ -3954,6 +3962,42 @@ the encrypted file has not changed since verification (compare bytes/hash).
 Never re-encrypt or rename the file. First recovery becomes current/default;
 later recovery does not. Repeating recovery of the same UUID and alias is a
 successful no-op; a conflicting alias/UUID/address is an error with guidance.
+
+### Passphrase rotation
+
+`wallet change-passphrase <alias>` asks privately for the existing passphrase,
+then asks for a non-empty replacement twice. Never accept a passphrase through
+arguments, environment variables, JSON, logs, or history. Validate the existing
+decryption and derived address, encrypt with fresh salt/nonce, and verify a new
+decrypt-and-derive round trip before touching the active file. Do not hold the
+store lock while prompting or running Argon2. Under the lock, verify that the
+same UUID/alias/address is still registered and that the keystore bytes still
+match the original snapshot. Write a mode-0600 temporary file in `wallets/`,
+validate it, atomically rename it over that exact UUID file, and sync the
+directory. A pre-rename failure preserves the old file. A post-rename sync
+failure is reported as uncertain; do not roll back a potentially committed
+replacement. Existing backups, including the retained legacy migration copy,
+are not re-encrypted and keep the old passphrase.
+
+### Local wallet deletion
+
+`wallet delete <alias>` shows the full address and requires an interactive
+default-no confirmation. Without a TTY, require explicit `--yes`. Reject
+deleting the saved default while any other wallet remains and tell the user to
+set a replacement first; deleting the last wallet sets the registry to its
+valid empty state. If the deleted wallet was current, clear that process's
+selection instead of choosing another wallet. Do not require the passphrase to
+delete an encrypted file.
+
+Deletion makes no RPC request and removes no on-chain SOL, tokens, stake, or
+lending positions. It removes the active registry entry, then unlinks only the
+managed UUID keystore while holding the store lock. Registry removal is the
+logical commit. If unlink fails, report partial completion and leave the
+remaining UUID file visible to `wallet list`; never silently re-register or
+recursively remove unrelated data. Preserve separate legacy backups and
+wallet-scoped stake recovery hints. Explain that unlinking is not secure
+erasure. A user must retain their original key or another backup if they may
+need to control chain assets later.
 
 ## 6. Legacy migration
 

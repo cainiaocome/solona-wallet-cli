@@ -67,6 +67,27 @@ describe("wallet shell parser and completion", () => {
         walletAliases: [],
       })[0],
     ).toEqual(["status", "deposit", "withdraw"]);
+    expect(
+      completeLine("wallet ", {
+        tokenMints: [],
+        stakeAccounts: [],
+        recentValidators: [],
+        walletAliases: [],
+      })[0],
+    ).toContain("change-passphrase");
+    const walletCache = {
+      tokenMints: [],
+      stakeAccounts: [],
+      recentValidators: [],
+      walletAliases: ["daily", "savings"],
+    };
+    expect(completeLine("wallet delete ", walletCache)[0]).toEqual(
+      walletCache.walletAliases,
+    );
+    expect(completeLine("wallet delete --", walletCache)[0]).toContain("--yes");
+    expect(completeLine("wallet change-passphrase ", walletCache)[0]).toEqual(
+      walletCache.walletAliases,
+    );
   });
 
   it("completes supported validators and token-list flags", () => {
@@ -108,7 +129,9 @@ describe("wallet shell parser and completion", () => {
 
   it("keeps general and topic help aligned with the wallet and status commands", () => {
     expect(helpText()).toContain("wallet recover <uuid> <alias>");
+    expect(helpText()).toContain("wallet delete <alias> [--yes]");
     expect(helpText("wallet")).toContain("wallet migrate <alias>");
+    expect(helpText("wallet")).toContain("wallet change-passphrase <alias>");
     expect(helpText("status")).toContain("non-zero token balances");
     expect(helpText("token")).toContain("--accounts");
   });
@@ -116,6 +139,8 @@ describe("wallet shell parser and completion", () => {
   it("filters secret-looking lines from history", () => {
     expect(isSafeHistoryLine("balance")).toBe(true);
     expect(isSafeHistoryLine("wallet import --password nope")).toBe(false);
+    expect(isSafeHistoryLine("wallet change-passphrase savings")).toBe(false);
+    expect(isSafeHistoryLine("wallet delete savings --yes")).toBe(true);
     expect(
       isSafeHistoryLine(
         "set rpc-url https://user:api-token@rpc.example/abc123",

@@ -2,14 +2,28 @@ import { formatSol, formatUnits } from "../solana/amounts.js";
 import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import { aggregateTokenAccounts, getTokenAccounts } from "../solana/tokens.js";
 import { table, shortenAddress } from "../output/human.js";
-import { asAppError, WalletStoreError } from "../errors/errors.js";
+import {
+  asAppError,
+  KeystoreError,
+  WalletStoreError,
+} from "../errors/errors.js";
 import { readLendPosition } from "./lending.js";
 import { readStakeAccounts } from "./staking.js";
 import { JUPITER_LEND_USDC_DECIMALS } from "../integrations/jupiter-lend/adapter.js";
+import { confirm, readSecret } from "../shell/prompt.js";
+import { walletKeystorePath } from "../config/config.js";
 import {
+  encryptSecretKey,
+  parseKeystoreFile,
+  unlockFileAndValidate,
+} from "../wallet/keystore.js";
+import {
+  deleteRegisteredWallet,
   listOrphanIds,
   mutateRegistry,
+  readRawKeystore,
   readRegistry,
+  replaceWalletKeystore,
   resolveWallet,
   validateAlias,
   walletFileStatus,
@@ -285,6 +299,188 @@ export async function walletRename(
       ? `Wallet renamed: ${oldAlias} → ${newAlias} (${entry.address})`
       : `Wallet alias is already '${newAlias}'.`,
   );
+}
+
+/** Remove one wallet from this local store; this never changes chain state. */
+export async function walletDelete(
+  context: CommandContext,
+  alias: string,
+  skipConfirmation = false,
+): Promise<void> {
+  validateAlias(alias);
+  const registry = await readRegistry(context.config.configDir);
+  const target = registry.wallets.find((wallet) => wallet.alias === alias);
+  if (!target)
+    throw new WalletStoreError(
+      "WalletNotFound",
+      `No wallet has alias '${alias}'.`,
+      2,
+    );
+  if (registry.defaultWalletId === target.id && registry.wallets.length > 1)
+    throw new WalletStoreError(
+      "WalletIsDefault",
+      `Wallet '${alias}' is the saved default. Run \`wallet default <another-alias>\` before deleting it.`,
+      2,
+    );
+  if (!skipConfirmation && !context.session.yes && !process.stdin.isTTY)
+    throw new WalletStoreError(
+      "PromptError",
+      "Wallet deletion requires an interactive terminal. Use `wallet delete <alias> --yes` only if you intend to remove this local wallet.",
+      2,
+    );
+
+  if (
+    !skipConfirmation &&
+    !context.session.yes &&
+    !(await confirm(
+      `Delete local wallet '${target.alias}' (${target.address})? This removes its registry entry and managed keystore only; it does not move or delete SOL, tokens, stake, or lending positions on Solana.`,
+    ))
+  ) {
+    context.output.print(
+      { ok: true, action: "delete", deleted: false, cancelled: true },
+      "Wallet deletion cancelled.",
+    );
+    return;
+  }
+
+  let result: Awaited<ReturnType<typeof deleteRegisteredWallet>>;
+  try {
+    result = await deleteRegisteredWallet(context.config.configDir, target);
+  } catch (error) {
+    // Registry replacement can report uncertain durability after its rename.
+    // Reconcile only the in-memory selection if a fresh read proves the delete
+    // committed; never guess when the registry itself cannot be read.
+    const latest = await readRegistry(context.config.configDir).catch(
+      () => undefined,
+    );
+    if (latest && !latest.wallets.some((wallet) => wallet.id === target.id))
+      refreshAfterWalletDeletion(context, target.id, latest);
+    throw error;
+  }
+  const wasCurrent = refreshAfterWalletDeletion(
+    context,
+    target.id,
+    result.registry,
+  );
+  const warning =
+    result.keystore === "retained"
+      ? "The wallet was removed from the registry, but its encrypted UUID keystore could not be deleted. Inspect `wallet list`; the orphan file can be recovered or removed after review."
+      : result.keystore === "durability-uncertain"
+        ? "The keystore file was removed, but the filesystem could not confirm durable deletion. Inspect `wallet list` before retrying."
+        : undefined;
+  const human = [
+    `Wallet '${target.alias}' removed from this local wallet store.`,
+    result.keystore === "already-missing"
+      ? "Its registered keystore file was already missing."
+      : result.keystore === "removed"
+        ? "Its registered encrypted keystore file was removed."
+        : undefined,
+    wasCurrent ? "No wallet is selected in this session." : undefined,
+    "No SOL, tokens, stake accounts, or lending positions were changed on Solana.",
+    "Separate legacy backups and local stake-recovery hints are left untouched; file deletion is not guaranteed secure erasure.",
+    warning,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  context.output.print(
+    {
+      ok: true,
+      action: "delete",
+      deleted: true,
+      partial:
+        result.keystore === "retained" ||
+        result.keystore === "durability-uncertain",
+      wallet: identity(target),
+      currentWalletId: context.session.currentWalletId,
+      defaultWalletId: result.registry.defaultWalletId,
+      keystore: result.keystore,
+      ...(warning ? { warning } : {}),
+    },
+    human,
+  );
+}
+
+/** Re-encrypt one key with a new passphrase without changing wallet identity. */
+export async function walletChangePassphrase(
+  context: CommandContext,
+  alias: string,
+): Promise<void> {
+  validateAlias(alias);
+  const registry = await readRegistry(context.config.configDir);
+  const entry = registry.wallets.find((wallet) => wallet.alias === alias);
+  if (!entry)
+    throw new WalletStoreError(
+      "WalletNotFound",
+      `No wallet has alias '${alias}'.`,
+      2,
+    );
+
+  const selected = await resolveWallet(
+    context.config.configDir,
+    entry.id,
+    registry,
+  );
+  const keystorePath = walletKeystorePath(context.config.configDir, entry.id);
+  const originalBytes = await readRawKeystore(keystorePath);
+  const originalFile = parseKeystoreFile(originalBytes);
+  if (originalFile.publicKey !== entry.address)
+    throw new WalletStoreError(
+      "WalletStoreInvalid",
+      `Keystore address does not match wallet '${entry.alias}'.`,
+    );
+
+  const previousWallet = context.commandWallet;
+  context.commandWallet = selected;
+  let oldPassphrase = "";
+  let newPassphrase = "";
+  let confirmation = "";
+  let secret: Buffer | undefined;
+  let verified: Buffer | undefined;
+  try {
+    oldPassphrase = await context.readPassphrase();
+    secret = await unlockFileAndValidate(originalFile, oldPassphrase);
+    newPassphrase = await readSecret(`New passphrase for ${entry.alias}: `);
+    confirmation = await readSecret("Confirm new passphrase: ");
+    if (!newPassphrase || newPassphrase !== confirmation)
+      throw new KeystoreError("New passphrases do not match or are empty.");
+    if (newPassphrase === oldPassphrase)
+      throw new KeystoreError(
+        "Choose a different passphrase; the current passphrase is unchanged.",
+      );
+
+    const encrypted = await encryptSecretKey(
+      secret,
+      entry.address,
+      newPassphrase,
+    );
+    verified = await unlockFileAndValidate(encrypted, newPassphrase);
+    verified.fill(0);
+    verified = undefined;
+    await replaceWalletKeystore(
+      context.config.configDir,
+      entry,
+      originalBytes,
+      encrypted,
+    );
+    context.output.print(
+      {
+        ok: true,
+        action: "change-passphrase",
+        changed: true,
+        wallet: identity(entry),
+        currentWalletId: context.session.currentWalletId,
+      },
+      `Passphrase changed for wallet '${entry.alias}'. Its address and wallet selection are unchanged.\nExisting backups were not re-encrypted and still require the previous passphrase.`,
+    );
+  } finally {
+    secret?.fill(0);
+    verified?.fill(0);
+    // JavaScript strings cannot be reliably zeroized; drop references promptly.
+    oldPassphrase = "";
+    newPassphrase = "";
+    confirmation = "";
+    context.commandWallet = previousWallet;
+  }
 }
 
 /**
@@ -599,6 +795,22 @@ export async function status(context: CommandContext): Promise<void> {
 export function clearWalletCaches(context: CommandContext): void {
   context.completion.tokenMints = [];
   context.completion.stakeAccounts = [];
+}
+
+function refreshAfterWalletDeletion(
+  context: CommandContext,
+  walletId: string,
+  registry: Awaited<ReturnType<typeof readRegistry>>,
+): boolean {
+  const wasCurrent = context.session.currentWalletId === walletId;
+  if (wasCurrent) {
+    context.session.currentWalletId = null;
+    clearWalletCaches(context);
+  }
+  context.completion.walletAliases = registry.wallets.map(
+    (wallet) => wallet.alias,
+  );
+  return wasCurrent;
 }
 
 export function displayRpcUrl(value: string): string {

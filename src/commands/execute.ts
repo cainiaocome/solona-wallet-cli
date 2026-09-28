@@ -17,7 +17,9 @@ import { importWallet } from "./wallet-import.js";
 import { migrateWallet, recoverWallet } from "./wallet-import.js";
 import {
   status as showStatus,
+  walletChangePassphrase,
   walletDefault,
+  walletDelete,
   walletInfo,
   walletList,
   walletRename,
@@ -251,7 +253,7 @@ async function executeWallet(
 ): Promise<void> {
   const [subcommand, ...args] = command.args;
   const usage =
-    "wallet import <alias> [--keypair-file <path>] | wallet list | wallet info [<alias>] | wallet use <alias> | wallet default <alias> | wallet rename <old> <new> | wallet migrate <alias> | wallet recover <uuid> <alias>";
+    "wallet import <alias> [--keypair-file <path>] | wallet list | wallet info [<alias>] | wallet use <alias> | wallet default <alias> | wallet rename <old> <new> | wallet delete <alias> [--yes] | wallet change-passphrase <alias> | wallet migrate <alias> | wallet recover <uuid> <alias>";
   if (!subcommand) {
     displayTopicHelp(context, "wallet");
     return;
@@ -268,8 +270,15 @@ async function executeWallet(
       "ParseError",
       2,
     );
-  if (command.flags.size > (hasFlag(command, "json") ? 1 : 0))
-    throw new AppError("Unknown wallet command flag.", "ParseError", 2);
+  const allowedWalletFlags = new Set(["json"]);
+  if (subcommand === "delete") allowedWalletFlags.add("yes");
+  for (const flag of command.flags.keys())
+    if (!allowedWalletFlags.has(flag))
+      throw new AppError(
+        `Unknown wallet command flag: --${flag}`,
+        "ParseError",
+        2,
+      );
   if (subcommand === "list") {
     if (args.length) throw new AppError("Usage: wallet list", "ParseError", 2);
     await walletList(context);
@@ -298,6 +307,26 @@ async function executeWallet(
     if (args.length !== 2)
       throw new AppError("Usage: wallet rename <old> <new>", "ParseError", 2);
     await walletRename(context, args[0]!, args[1]!);
+  } else if (subcommand === "delete") {
+    if (args.length !== 1)
+      throw new AppError(
+        "Usage: wallet delete <alias> [--yes]",
+        "ParseError",
+        2,
+      );
+    await walletDelete(
+      context,
+      args[0]!,
+      hasFlag(command, "yes") || context.session.yes,
+    );
+  } else if (subcommand === "change-passphrase") {
+    if (args.length !== 1)
+      throw new AppError(
+        "Usage: wallet change-passphrase <alias>",
+        "ParseError",
+        2,
+      );
+    await walletChangePassphrase(context, args[0]!);
   } else if (subcommand === "recover") {
     if (args.length !== 2)
       throw new AppError(
@@ -597,6 +626,8 @@ function validateFlags(command: ParsedCommand): void {
     allowed.add("max-commission");
   } else if (name === "wallet" && subcommand === "import") {
     allowed.add("keypair-file");
+  } else if (name === "wallet" && subcommand === "delete") {
+    allowed.add("yes");
   } else if (name === "token" && subcommand === "list") {
     allowed.add("accounts");
   } else if (name === "token" && subcommand === "send") {

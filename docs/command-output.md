@@ -52,6 +52,14 @@ immediately liquid.
 
 - `wallet list` marks current and saved-default wallets; `wallet info` shows a
   wallet's full public address. These are local metadata reads.
+- `wallet change-passphrase <alias>` asks for the old passphrase and then the
+  new one twice in hidden prompts. It keeps the address, current wallet, and
+  saved default unchanged; backups are not updated.
+- `wallet delete <alias>` shows the full address and defaults to a no answer.
+  `--yes` is explicit consent for scripts. It removes the active local
+  keystore, but does not transfer or delete on-chain assets. Deleting the
+  current wallet leaves the shell with no wallet selected; other accounts are
+  never selected implicitly.
 - `address` prints the selected wallet address and network.
 - `balance` shows the human SOL amount. Exact lamports are available in JSON,
   or in human output when the process is started with `--verbose`.
@@ -101,6 +109,8 @@ a later `stake list` to reconcile it with the chain.
 `--dry-run` prints that the transaction was simulated and not broadcast.
 `--yes` skips only the confirmation question; it does not skip validation,
 simulation, or the passphrase prompt required to sign.
+For `wallet delete`, `--yes` skips the local deletion confirmation only; it
+does not authorize or perform any on-chain action.
 
 ## Help and scripting
 
@@ -133,7 +143,10 @@ arguments so they can be recalled; likely private-key encodings and commands
 containing secret-bearing words are excluded. A 32-byte base58 string is
 ambiguous by format alone, so never paste a raw seed/private key into a command
 argument; enter wallet key material only at the hidden import prompt or through
-the documented keypair-file flow. As previously accepted, an RPC URL supplied
+the documented keypair-file flow. The history filter also excludes the
+`wallet change-passphrase` command line because it contains a secret-related
+word, even though that command never accepts a secret as an argument. As
+previously accepted, an RPC URL supplied
 to `set rpc-url` is echoed and the typed command may be retained in history;
 avoid credentials in the URL when using interactive history, or clear history
 with `clear`/`cls`.

@@ -34,6 +34,8 @@ const nested: Record<string, string[]> = {
     "use",
     "default",
     "rename",
+    "delete",
+    "change-passphrase",
     "migrate",
     "recover",
   ],
@@ -45,6 +47,8 @@ const nested: Record<string, string[]> = {
   show: ["config"],
 };
 const flags: Record<string, string[]> = {
+  "wallet delete": ["--yes", "--json"],
+  "wallet change-passphrase": ["--json"],
   validators: [
     "--limit",
     "--include-delinquent",
@@ -86,7 +90,9 @@ export function completeLine(
         flags[parts[0]!] ?? ["--json", "--dry-run", "--yes"];
     else if (
       parts[0] === "wallet" &&
-      ["use", "default", "info"].includes(parts[1] ?? "")
+      ["use", "default", "info", "delete", "change-passphrase"].includes(
+        parts[1] ?? "",
+      )
     )
       candidates = cache.walletAliases;
     else if (command === "token balance" || command === "token send")
