@@ -1,55 +1,46 @@
-# Review remediation
+# Review remediation — complete
 
-## Goal
+## Goal and outcome
 
-Fix the actionable findings from the 2026-09-27 full-project review, add
-regressions and beginner-facing documentation, then format, validate, commit,
-push to `master`, and confirm GitHub Actions passes.
+Address the actionable findings from the 2026-09-27 full-project review, add
+regressions and beginner-facing documentation, and publish the changes to
+`master`. Implementation is in `6aecce0`; the detailed validation and behavior
+notes are in [the remediation record](docs/review-remediation-2026-09-27.md).
 
-## Current state
+## Completed
 
-- [complete] Token-send destination lookup explicitly uses base64; the Docker
-  mock models the large-account encoding limit and covers absent/existing ATAs.
-- [complete] The wrapper forwards supported network environment settings;
-  README now explains its host `.env` limitation.
-- [complete] Validator completion, JSON wallet-import address confirmation,
-  and command-history filtering improvements with regressions.
-- [complete] Stake-create stores its signed recovery hint before broadcast and
-  includes the known stake address on uncertain confirmation/broadcast errors.
-- [complete] Stake-account existence checks use base64, including the resumable
-  Devnet lifecycle's direct lookup.
-- [complete] Finalized confirmation gets a longer polling window and historical
-  lookup is deferred until the last poll (expiry-boundary checks remain).
-- [complete] Address smaller review notes: validate `tx inspect` signatures,
-  remove unused imports, reuse the lending RPC client, and avoid the duplicate
-  stake cluster check.
-- [complete] Update beginner-facing output, configuration, security, Devnet,
-  and review-remediation documentation.
-- [complete] Final local validation: 87 unit tests; lint/build; Prettier/Black,
-  Python/Bash checks; Linux/amd64 image build; all 21 Docker/Python E2E tests.
-- [complete] Added a mocked ambiguous stake-create regression proving the local
-  hint is saved before broadcast and the error carries signature/address data.
-- [complete] Commit `6aecce0` pushed to `master`; GitHub Actions run
+- Fixed token/stake account-data encodings, Docker launcher configuration,
+  ambiguous stake-create recovery, confirmation polling, shell completion,
+  JSON wallet-import feedback, history filtering, and `tx inspect` validation.
+- Addressed the review's smaller cleanup notes and updated user/security/test
+  documentation.
+- Added deterministic unit, mock-RPC, wrapper, and Docker E2E regressions.
+- Pushed implementation and documentation commits to `master`; both workflows
+  passed. The tested image was published by the implementation commit.
+
+## Validation
+
+- 87 unit tests across 20 files; lint/build and format checks passed.
+- Black, Python compilation, Bash syntax, ShellCheck, and `git diff --check`
+  passed.
+- Linux/amd64 image build and all 21 Docker/Python E2E tests passed.
+- Implementation Actions run
   [36361947729](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36361947729)
-  passed every gate and published the tested image.
-- [in progress] Commit/push the documentation update recording the completed
-  Actions run, then verify its workflow.
+  and documentation Actions run
+  [36362144059](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36362144059)
+  passed all gates.
+- No Mainnet or live-chain transaction was submitted; no system packages were
+  installed.
 
-## Decisions and constraints
+## Constraints and accepted behavior
 
-- Leave RPC URL credentials in command output/history as previously accepted;
-  document this behavior accurately without widening disclosure elsewhere.
-- No Mainnet transaction or live-chain write is part of this remediation.
-- Keep real-chain tests Devnet-only and deterministic PR tests as the required
-  CI gate. Do not install system packages.
-- Commit only after formatting, tests, lint/build, and available Docker E2E
-  validation pass; verify the pushed workflow before reporting completion.
+- RPC URL credentials may be echoed and retained in history as previously
+  accepted; that behavior is documented and was not broadened.
+- Real-chain tests remain Devnet-only with genesis verification and disposable
+  wallets. The required PR gate remains deterministic Docker E2E.
 
-## Validation so far
+## Remaining
 
-- Primary edits: `test/unit/transaction-safety.test.ts` and
-  `test/unit/staking.test.ts` — focused tests and integrated run passed.
-- Launcher subtask reported wrapper tests, lint, Prettier, ShellCheck, Bash
-  syntax, and diff check passing.
-- Token-send subtask reported unit tests, lint, build, Docker image and 16
-  Docker/mock E2E tests passing. Re-run full validation after integration.
+No implementation work remains. Live Devnet smoke/lifecycle runs remain
+scheduled/manual and depend on faucet/provider and dedicated test-wallet
+availability, as described in `docs/devnet-e2e-plan.md`.
