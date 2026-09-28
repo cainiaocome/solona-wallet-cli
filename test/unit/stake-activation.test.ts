@@ -8,6 +8,7 @@ import { address, createSolanaRpc } from "@solana/kit";
 import { describe, expect, it, vi } from "vitest";
 import { createCommandContext } from "../../src/commands/context.js";
 import { stakeList } from "../../src/commands/staking.js";
+import { Output } from "../../src/output/output.js";
 import { ensureScopedStakeDirectory } from "../../src/wallet/store.js";
 
 const walletAddress = address("11111111111111111111111111111114");
@@ -63,7 +64,7 @@ describe("stake activation compatibility", () => {
                       },
                       stake: {
                         delegation: {
-                          voterPubkey: "11111111111111111111111111111113",
+                          voter: "11111111111111111111111111111113",
                           stake: "1900000000",
                           activationEpoch: "1043",
                           deactivationEpoch: maxEpoch,
@@ -126,7 +127,7 @@ describe("stake activation compatibility", () => {
                           },
                           stake: {
                             delegation: {
-                              voterPubkey: "11111111111111111111111111111113",
+                              voter: "11111111111111111111111111111113",
                               stake: "1900000000",
                               activationEpoch: "1043",
                               deactivationEpoch: maxEpoch,
@@ -199,12 +200,23 @@ describe("stake activation compatibility", () => {
         address: stakeAddress,
         state: "activating",
         delegatedStakeLamports: "1900000000",
+        validatorVoteAccount: "11111111111111111111111111111113",
       });
       expect(methods).toContain("getEpochInfo");
       expect(
         methods.filter((method) => method === "getAccountInfo"),
       ).toHaveLength(2);
       expect(methods).not.toContain("getStakeActivation");
+
+      context.output = new Output(
+        { json: false, verbose: false },
+        () => context.commandWallet?.identity,
+        () => context.config.cluster,
+      );
+      await stakeList(context);
+      expect(output.slice(1).join("")).toContain(
+        "11111111111111111111111111111113",
+      );
     } finally {
       vi.restoreAllMocks();
       await new Promise<void>((resolve, reject) => {

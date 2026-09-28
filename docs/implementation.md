@@ -104,6 +104,10 @@ Token reads query both the legacy Token Program and Token-2022. Basic Token-2022
 
 Native staking uses the official generated System and Stake clients. The stake create path is `CreateAccountWithSeed`, `Initialize`, and `DelegateStake`, with the wallet as both authorities and a blockhash-derived seed bounded to System Program seed length. Required Rent, Clock, StakeHistory, and StakeConfig accounts are inserted explicitly because the pinned generated Stake package does not model all builtin positional sysvars. Rent and minimum delegation are queried dynamically. Stake discovery makes two server-side `getProgramAccounts` queries, one for staker and one for withdrawer, rather than downloading and filtering all stake accounts locally. Activation state is calculated by Anza's client-side extension from standard epoch, stake-account, and StakeHistory reads; this replaces the removed `getStakeActivation` RPC. The CLI does not equate a passed deactivation epoch with complete cooldown. A future lockup is checked against chain time and epoch, with the custodian authority honored.
 
+The Stake Program's `jsonParsed` delegation uses the field `voter` for the
+validator vote-account address. `stake list` and deactivation previews read
+that exact RPC field; tests use the real parsed response shape.
+
 If a locally registered stake address is absent from program-account discovery,
 the CLI checks it directly. It removes that local recovery hint only after a
 successful account lookup confirms the account is closed. RPC failures retain

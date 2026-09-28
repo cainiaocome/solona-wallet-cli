@@ -1,46 +1,32 @@
-# Review remediation — complete
+# Stake validator vote-account display fix — implementation complete, CI pending
 
-## Goal and outcome
+## Goal
 
-Address the actionable findings from the 2026-09-27 full-project review, add
-regressions and beginner-facing documentation, and publish the changes to
-`master`. Implementation is in `6aecce0`; the detailed validation and behavior
-notes are in [the remediation record](docs/review-remediation-2026-09-27.md).
+Show the validator vote-account address returned by Solana's parsed Stake
+Program RPC data in `stake list` and stake deactivation previews.
 
 ## Completed
 
-- Fixed token/stake account-data encodings, Docker launcher configuration,
-  ambiguous stake-create recovery, confirmation polling, shell completion,
-  JSON wallet-import feedback, history filtering, and `tx inspect` validation.
-- Addressed the review's smaller cleanup notes and updated user/security/test
-  documentation.
-- Added deterministic unit, mock-RPC, wrapper, and Docker E2E regressions.
-- Pushed implementation and documentation commits to `master`; both workflows
-  passed. The tested image was published by the implementation commit.
+- Read the JSON field `delegation.voter` in stake listing and controlled-stake
+  previews; the former `voterPubkey` expectation did not match Solana's parsed
+  RPC shape.
+- Changed the RPC fixture to the real field name and asserted both JSON and
+  human `stake list` output.
+- Extended the resumable Devnet lifecycle check to compare the CLI result with
+  an independent `getAccountInfo(jsonParsed)` response and validate deactivation
+  preflight output.
+- Updated implementation and Devnet-test documentation.
 
 ## Validation
 
-- 87 unit tests across 20 files; lint/build and format checks passed.
-- Black, Python compilation, Bash syntax, ShellCheck, and `git diff --check`
-  passed.
-- Linux/amd64 image build and all 21 Docker/Python E2E tests passed.
-- Implementation Actions run
-  [36361947729](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36361947729)
-  and documentation Actions run
-  [36362144059](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36362144059)
-  passed all gates.
-- No Mainnet or live-chain transaction was submitted; no system packages were
-  installed.
-
-## Constraints and accepted behavior
-
-- RPC URL credentials may be echoed and retained in history as previously
-  accepted; that behavior is documented and was not broadened.
-- Real-chain tests remain Devnet-only with genesis verification and disposable
-  wallets. The required PR gate remains deterministic Docker E2E.
+- `npm test`: 87 tests passed across 20 files.
+- `npm run lint`, `npm run build`, `npm run format:check`, Black, Python
+  compilation, and `git diff --check` passed.
+- Linux/amd64 Docker image build succeeded; all 21 Docker/Python E2E tests
+  passed against that image.
+- The credentialed live Devnet lifecycle was not run; no live-chain transaction
+  was submitted.
 
 ## Remaining
 
-No implementation work remains. Live Devnet smoke/lifecycle runs remain
-scheduled/manual and depend on faucet/provider and dedicated test-wallet
-availability, as described in `docs/devnet-e2e-plan.md`.
+- Commit and push the changes, then verify GitHub Actions for the pushed commit.

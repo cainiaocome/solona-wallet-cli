@@ -877,7 +877,8 @@ async function getControlledStake(
   const withdrawableLamports = state === "inactive" ? lamports : 0n;
   return {
     delegated,
-    validatorVoteAccount: String(delegation?.voterPubkey ?? "unknown"),
+    // Solana's jsonParsed Stake Program response calls this field `voter`.
+    validatorVoteAccount: String(delegation?.voter ?? "unknown"),
     stakeLamports,
     lamports,
     withdrawableLamports,
@@ -918,7 +919,7 @@ async function parseStakeAccount(
     lamports,
     rentReserveLamports: BigInt(info?.meta?.rentExemptReserve ?? 0),
     delegatedStakeLamports: BigInt(delegation?.stake ?? 0),
-    validatorVoteAccount: String(delegation?.voterPubkey ?? "unknown"),
+    validatorVoteAccount: String(delegation?.voter ?? "unknown"),
     stakerAuthority: String(info?.meta?.authorized?.staker ?? "unknown"),
     withdrawAuthority: String(info?.meta?.authorized?.withdrawer ?? "unknown"),
     activationEpoch: activationEpoch ?? null,

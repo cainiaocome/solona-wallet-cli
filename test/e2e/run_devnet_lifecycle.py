@@ -272,6 +272,10 @@ def run():
                     "new stake account had an unexpected activation state",
                 )
                 e2e.require(
+                    created_record.get("validatorVoteAccount") == validator,
+                    "stake list omitted or misreported the validator vote account",
+                )
+                e2e.require(
                     e2e.method_count(proxy, "sendTransaction") == before_broadcasts + 1,
                     "stake create did not broadcast exactly one confirmed transaction",
                 )
@@ -282,6 +286,45 @@ def run():
                 return
 
             stake_account = account["address"]
+            parsed_account = e2e.direct_rpc(
+                "getAccountInfo",
+                [
+                    stake_account,
+                    {"commitment": "confirmed", "encoding": "jsonParsed"},
+                ],
+            ).get("value")
+            parsed_data = (
+                parsed_account.get("data", {})
+                if isinstance(parsed_account, dict)
+                else {}
+            )
+            parsed_payload = (
+                parsed_data.get("parsed", {}) if isinstance(parsed_data, dict) else {}
+            )
+            parsed_info = (
+                parsed_payload.get("info", {})
+                if isinstance(parsed_payload, dict)
+                else {}
+            )
+            parsed_stake = (
+                parsed_info.get("stake", {}) if isinstance(parsed_info, dict) else {}
+            )
+            delegation = (
+                parsed_stake.get("delegation", {})
+                if isinstance(parsed_stake, dict)
+                else {}
+            )
+            chain_vote_account = (
+                delegation.get("voter") if isinstance(delegation, dict) else None
+            )
+            e2e.require(
+                isinstance(chain_vote_account, str) and bool(chain_vote_account),
+                "Devnet jsonParsed stake account did not contain delegation.voter",
+            )
+            e2e.require(
+                account.get("validatorVoteAccount") == chain_vote_account,
+                "stake list validator vote account disagreed with on-chain delegation.voter",
+            )
             state = account.get("state")
             e2e.require(
                 account.get("stakerAuthority") == address
@@ -328,6 +371,11 @@ def run():
                 e2e.require(
                     isinstance(deactivated.get("signature"), str),
                     "stake deactivation returned no signature",
+                )
+                e2e.require(
+                    deactivated.get("preflight", {}).get("validatorVoteAccount")
+                    == account.get("validatorVoteAccount"),
+                    "stake deactivation preflight omitted or misreported the validator vote account",
                 )
                 e2e.require(
                     e2e.method_count(proxy, "sendTransaction") == before_broadcasts + 1,

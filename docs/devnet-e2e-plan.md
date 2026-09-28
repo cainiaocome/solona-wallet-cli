@@ -241,6 +241,10 @@ shared public endpoint sustaining high concurrency.
 | `jupiter-lend status/deposit/withdraw`                               | On Devnet, assert all commands hit the mainnet-only guard before protocol reads, wallet unlock, or broadcast. Use deterministic tests for actual Jupiter instructions; never substitute Mainnet writes.                                                                                               |
 | `history`, `clear`/`cls`, `exit`/`quit`/`q`, aliases `bal`/`q`/`cls` | Exercise REPL, one-shot, and piped behavior in the Docker/PTTY suite. These are local shell operations; assert the RPC proxy records no chain requests.                                                                                                                                               |
 
+During the resumable stake lifecycle, compare each displayed
+`validatorVoteAccount` with `getAccountInfo(jsonParsed)`'s
+`data.parsed.info.stake.delegation.voter` for the same stake account.
+
 For every command that supports both formats, check human and JSON output.
 For every write, assert network/wallet/amount/destination/validator/fee in
 preflight, simulation before signing, confirmation behavior, confirmed receipt,

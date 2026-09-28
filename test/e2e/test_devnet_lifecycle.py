@@ -15,6 +15,7 @@ import run_devnet_lifecycle as lifecycle
 WALLET = "wallet-test-address"
 RECORDED_STAKE = "stake-created-by-test"
 OTHER_STAKE = "pre-existing-wallet-stake"
+VOTE_ACCOUNT = "validator-vote-account"
 MINIMUM = 1_000_000_000
 
 
@@ -65,6 +66,18 @@ class DevnetLifecycleTests(unittest.TestCase):
                 return lifecycle.e2e.DEVNET_GENESIS
             if method == "getStakeMinimumDelegation":
                 return {"value": MINIMUM}
+            if method == "getAccountInfo":
+                return {
+                    "value": {
+                        "data": {
+                            "parsed": {
+                                "info": {
+                                    "stake": {"delegation": {"voter": VOTE_ACCOUNT}}
+                                }
+                            }
+                        }
+                    }
+                }
             raise AssertionError(f"unexpected direct RPC method: {method}")
 
         def success(_directory, _image, command, **_kwargs):
@@ -119,6 +132,7 @@ class DevnetLifecycleTests(unittest.TestCase):
                 "delegatedStakeLamports": str(MINIMUM),
                 "stakerAuthority": WALLET,
                 "withdrawAuthority": WALLET,
+                "validatorVoteAccount": VOTE_ACCOUNT,
                 "state": "activating",
             },
         ]
