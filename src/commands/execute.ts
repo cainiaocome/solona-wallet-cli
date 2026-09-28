@@ -10,7 +10,7 @@ import {
   rejectExtraArgs,
   type ParsedCommand,
 } from "../shell/parser.js";
-import { helpText } from "../shell/help.js";
+import { helpText, styleHelpText } from "../shell/help.js";
 import { Output } from "../output/output.js";
 import { transactionExplorerUrl } from "../output/transaction.js";
 import { importWallet } from "./wallet-import.js";
@@ -139,12 +139,11 @@ export async function executeParsed(
     // Keep the command wallet and output mode alive until the async handler
     // finishes; the finally block below restores both execution-scoped values.
     switch (name) {
-      case "help":
-        context.output.print(
-          { ok: true, help: helpText(command.args.join(" ") || undefined) },
-          helpText(command.args.join(" ") || undefined),
-        );
+      case "help": {
+        const help = helpText(command.args.join(" ") || undefined);
+        context.output.print({ ok: true, help }, styleHelpText(help));
         return { exit: false };
+      }
       case "address":
         rejectExtraArgs(command, 0, "address");
         await showAddress(context);
@@ -563,7 +562,7 @@ function formatTransactionSummary(
 
 function displayTopicHelp(context: CommandContext, topic: string): void {
   const help = helpText(topic);
-  context.output.print({ ok: true, help }, help);
+  context.output.print({ ok: true, help }, styleHelpText(help));
 }
 
 function parseOptionalInteger(

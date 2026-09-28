@@ -28,6 +28,7 @@ class DockerReplTests(unittest.TestCase):
         child = self.spawn(pexpect, directory, port)
         try:
             child.expect(r"sol-wallet \[devnet \| no-wallet\]>")
+            self.assertNotRegex(child.before, r"\x1b\[[0-9;]*m")
             child.send("tok\t")
             child.expect("token")
             child.send(" \t\t")
@@ -59,6 +60,30 @@ class DockerReplTests(unittest.TestCase):
             self.assertNotIn(
                 "password should not persist", (directory / "history").read_text()
             )
+        finally:
+            if child.isalive():
+                child.close(force=True)
+            server.shutdown()
+            shutil.rmtree(directory, ignore_errors=True)
+
+    def test_color_is_enabled_in_tty_and_no_color_can_be_disabled(self):
+        try:
+            import pexpect
+        except ImportError:
+            self.skipTest("pexpect is required for PTY E2E")
+        server = start_server()
+        port = server.server_address[1]
+        directory = Path(tempfile.mkdtemp(prefix="sol-wallet-color-"))
+        child = self.spawn(pexpect, directory, port, no_color=False)
+        try:
+            child.expect(r"\x1b\[1;36mSolana Wallet CLI\x1b\[0m")
+            child.expect(r"\x1b\[36mdevnet\x1b\[0m")
+            child.sendline("help")
+            child.expect("wallet list")
+            child.sendline("exit")
+            child.expect(pexpect.EOF)
+            child.close()
+            self.assertEqual(child.exitstatus, 0)
         finally:
             if child.isalive():
                 child.close(force=True)
@@ -130,14 +155,14 @@ class DockerReplTests(unittest.TestCase):
 
             Handler.state.transactions.clear()
             child.sendline("send 11111111111111111111111111111112 1")
-            child.expect("Wallet: vault")
+            child.expect(r"Wallet\s*: vault")
             child.expect("Send 1 SOL from vault")
             child.sendline("y")
             child.expect("Passphrase for vault")
             child.sendline("secondary test passphrase")
             child.expect("Waiting for transaction confirmation")
             child.expect("SOL transfer confirmed")
-            child.expect("Explorer: https://explorer.solana.com/tx/")
+            child.expect(r"Explorer\s*: https://explorer.solana.com/tx/")
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
             child.sendline(
@@ -147,7 +172,7 @@ class DockerReplTests(unittest.TestCase):
             child.expect("Passphrase for vault")
             child.sendline("secondary test passphrase")
             child.expect("Token transfer confirmed")
-            child.expect("Explorer: https://explorer.solana.com/tx/")
+            child.expect(r"Explorer\s*: https://explorer.solana.com/tx/")
             child.expect(r"sol-wallet \[devnet \| vault \| [^]]+\]>")
 
             child.sendline(
@@ -244,27 +269,37 @@ class DockerReplTests(unittest.TestCase):
         shutil.rmtree(directory, ignore_errors=True)
 
     @staticmethod
-    def spawn(pexpect, directory, port):
-        return pexpect.spawn(
+    def spawn(pexpect, directory, port, no_color=True):
+        args = [
             "docker",
+            "run",
+            "--rm",
+            "-it",
+            "--network",
+            "host",
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
+            "-e",
+            "SOL_WALLET_CONFIG_DIR=/home/solwallet/.config/sol-wallet",
+            "-e",
+            "SOL_WALLET_CLUSTER=devnet",
+            "-e",
+            f"SOL_WALLET_RPC_URL=http://127.0.0.1:{port}",
+            "-e",
+            "TERM=xterm-256color",
+        ]
+        if no_color:
+            args.extend(["-e", "NO_COLOR=1"])
+        args.extend(
             [
-                "run",
-                "--rm",
-                "-it",
-                "--network",
-                "host",
-                "--user",
-                f"{os.getuid()}:{os.getgid()}",
-                "-e",
-                "SOL_WALLET_CONFIG_DIR=/home/solwallet/.config/sol-wallet",
-                "-e",
-                "SOL_WALLET_CLUSTER=devnet",
-                "-e",
-                f"SOL_WALLET_RPC_URL=http://127.0.0.1:{port}",
                 "-v",
                 f"{directory}:/home/solwallet/.config/sol-wallet",
                 IMAGE,
-            ],
+            ]
+        )
+        return pexpect.spawn(
+            args[0],
+            args[1:],
             encoding="utf-8",
             timeout=20,
         )

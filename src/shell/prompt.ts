@@ -1,6 +1,7 @@
 import readline from "node:readline";
 import { readSync } from "node:fs";
 import { AppError } from "../errors/errors.js";
+import { color } from "../output/terminal.js";
 
 export interface PromptIO {
   input: NodeJS.ReadableStream & {
@@ -92,7 +93,16 @@ export async function confirm(
   question: string,
   defaultNo = true,
 ): Promise<boolean> {
-  const answer = (await readLine(`${question} [y/N] `)).trim().toLowerCase();
+  const highlighted = question.replace(/\bMAINNET\b/g, (network) =>
+    color(network, "warning", { stream: "stderr" }),
+  );
+  const answer = (
+    await readLine(
+      `${highlighted} ${color("[y/N]", "emphasis", { stream: "stderr" })} `,
+    )
+  )
+    .trim()
+    .toLowerCase();
   if (!answer) return !defaultNo;
   return answer === "y" || answer === "yes";
 }

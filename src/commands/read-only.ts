@@ -1,6 +1,12 @@
 import { address, type Address } from "@solana/kit";
 import { formatSol } from "../solana/amounts.js";
-import { table } from "../output/human.js";
+import {
+  keyValueRows,
+  networkLabel,
+  sectionTitle,
+  table,
+} from "../output/human.js";
+import { color } from "../output/terminal.js";
 import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import { aggregateTokenAccounts, getTokenAccounts } from "../solana/tokens.js";
 import { listValidators } from "../solana/validators.js";
@@ -42,7 +48,10 @@ export async function showAddress(context: CommandContext): Promise<void> {
   const wallet = selected.identity.address;
   context.output.print(
     { ok: true, address: wallet, cluster: context.config.cluster },
-    `Wallet: ${wallet}\nNetwork: ${context.config.cluster}`,
+    keyValueRows([
+      ["Wallet", wallet],
+      ["Network", networkLabel(context.config.cluster)],
+    ]),
   );
 }
 
@@ -64,7 +73,17 @@ export async function showBalance(context: CommandContext): Promise<void> {
   };
   context.output.print(
     data,
-    `Wallet: ${wallet}\nNetwork: ${context.config.cluster}\nSOL balance: ${formatSol(lamports)} SOL${context.output.verbose ? `\nLamports: ${lamports}` : ""}`,
+    [
+      sectionTitle("SOL BALANCE"),
+      keyValueRows([
+        ["Wallet", String(wallet)],
+        ["Network", networkLabel(context.config.cluster)],
+        ["Balance", `${formatSol(lamports)} SOL`, "emphasis"],
+        ...(context.output.verbose
+          ? [["Exact lamports", String(lamports)] as const]
+          : []),
+      ]),
+    ].join("\n"),
   );
 }
 
@@ -113,7 +132,11 @@ export async function showTokenList(
     : "No SPL or Token-2022 token accounts found.";
   context.output.print(
     data,
-    `Network: ${context.config.cluster}\n${tokenRows}`,
+    [
+      sectionTitle("TOKEN ACCOUNTS"),
+      keyValueRows([["Network", networkLabel(context.config.cluster)]]),
+      tokenRows,
+    ].join("\n"),
   );
 }
 
@@ -144,7 +167,15 @@ export async function showTokenBalance(
     };
     context.output.print(
       data,
-      `Network: ${context.config.cluster}\nToken balance: 0\nMint: ${mint}\nNo token account found for this mint.`,
+      [
+        sectionTitle("TOKEN BALANCE"),
+        keyValueRows([
+          ["Network", networkLabel(context.config.cluster)],
+          ["Mint", mint],
+          ["Balance", "0", "emphasis"],
+          ["Account", "No token account found for this mint."],
+        ]),
+      ].join("\n"),
     );
     return;
   }
@@ -159,7 +190,18 @@ export async function showTokenBalance(
       amount: balance.amount,
       accountCount: balance.accountCount,
     },
-    `Network: ${context.config.cluster}\nToken balance: ${balance.amount}\nMint: ${mint}\nToken accounts: ${balance.accountCount}${context.output.verbose ? `\nRaw amount: ${balance.rawAmount}` : ""}`,
+    [
+      sectionTitle("TOKEN BALANCE"),
+      keyValueRows([
+        ["Network", networkLabel(context.config.cluster)],
+        ["Mint", mint],
+        ["Balance", balance.amount, "emphasis"],
+        ["Token accounts", String(balance.accountCount)],
+        ...(context.output.verbose
+          ? [["Raw amount", String(balance.rawAmount)] as const]
+          : []),
+      ]),
+    ].join("\n"),
   );
 }
 
@@ -178,12 +220,19 @@ export async function showValidators(
       sort: "activatedStake descending",
       validators: rows,
     },
-    `Network: ${context.config.cluster}\n` +
+    `${keyValueRows([["Network", networkLabel(context.config.cluster)]])}\n` +
+      `${sectionTitle("VALIDATORS · SORTED BY ACTIVATED STAKE")}\n` +
       (rows.length
         ? table(
             rows.map((row) => [
-              row.status,
-              `${row.commission}%`,
+              color(
+                row.status,
+                row.status === "current" ? "success" : "warning",
+              ),
+              color(
+                `${row.commission}%`,
+                row.commission === 100 ? "warning" : "emphasis",
+              ),
               `${formatSol(row.activatedStake)} SOL`,
               row.voteAccount,
             ]),
@@ -204,7 +253,12 @@ export async function showConfig(context: CommandContext): Promise<void> {
       commitment: context.config.commitment,
       configDir: context.config.configDir,
     },
-    `Cluster: ${context.config.cluster}\nRPC URL: ${rpcUrl}\nCommitment: ${context.config.commitment}\nConfig directory: ${context.config.configDir}`,
+    keyValueRows([
+      ["Network", networkLabel(context.config.cluster)],
+      ["RPC URL", rpcUrl],
+      ["Commitment", context.config.commitment],
+      ["Config directory", context.config.configDir],
+    ]),
   );
 }
 

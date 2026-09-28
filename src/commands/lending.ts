@@ -42,6 +42,12 @@ import { rpcRequest } from "../solana/rpc.js";
 import { hasFlag, type ParsedCommand } from "../shell/parser.js";
 import { EncryptedKeystoreSigner } from "../wallet/signer.js";
 import { formatTransactionReceipt } from "../output/transaction.js";
+import {
+  actionPreview,
+  keyValueRows,
+  networkLabel,
+  sectionTitle,
+} from "../output/human.js";
 
 /**
  * Jupiter Lend command layer.
@@ -102,7 +108,17 @@ export async function lendDeposit(
       cluster: context.config.cluster,
       currentSupplied: position.supplied,
     },
-    `Action:        Jupiter Lend USDC deposit\nWallet:        ${owner}\nAsset:         USDC\nAmount:        ${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC\nProtocol:      Jupiter Lend Earn\nNetwork:       ${context.config.cluster}`,
+    actionPreview("JUPITER LEND DEPOSIT · TRANSACTION PREVIEW", [
+      ["Wallet", String(owner)],
+      ["Asset", "USDC"],
+      [
+        "Amount",
+        `${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC`,
+        "emphasis",
+      ],
+      ["Protocol", "Jupiter Lend Earn"],
+      ["Network", networkLabel(context.config.cluster)],
+    ]),
     () => adapter.getPosition(owner),
   );
 }
@@ -161,7 +177,17 @@ export async function lendWithdraw(
       currentSupplied: position.supplied,
       currentWithdrawable: position.withdrawable,
     },
-    `Action:        Jupiter Lend USDC withdraw\nWallet:        ${owner}\nAsset:         USDC\nAmount:        ${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC\nProtocol:      Jupiter Lend Earn\nNetwork:       ${context.config.cluster}`,
+    actionPreview("JUPITER LEND WITHDRAW · TRANSACTION PREVIEW", [
+      ["Wallet", String(owner)],
+      ["Asset", "USDC"],
+      [
+        "Amount",
+        `${formatUnits(amount, JUPITER_LEND_USDC_DECIMALS)} USDC`,
+        "emphasis",
+      ],
+      ["Protocol", "Jupiter Lend Earn"],
+      ["Network", networkLabel(context.config.cluster)],
+    ]),
     () => adapter.getPosition(owner),
   );
 }
@@ -254,7 +280,10 @@ async function runLendInstruction(
   };
   context.output.preflight(
     { ok: true, preflight },
-    `${human}\nNetwork fee:  ~${formatSol(fee)} SOL`,
+    `${human}\n${keyValueRows([
+      ["Account rent", `${formatSol(ataCreationCost)} SOL`],
+      ["Estimated fee", `~${formatSol(fee)} SOL`],
+    ])}`,
   );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
@@ -440,21 +469,28 @@ function positionHuman(
   verbose: boolean,
 ): string {
   const lines = [
-    `Wallet: ${data.wallet}`,
-    `Network: ${data.cluster}`,
-    "Asset: USDC",
-    `Wallet balance: ${data.walletBalanceUsdc} USDC`,
-    `Jupiter Lend supplied: ${data.suppliedUsdc} USDC`,
-    `Protocol liquidity limit: ${data.protocolWithdrawableUsdc} USDC`,
-    `Currently withdrawable: ${data.currentlyWithdrawableUsdc} USDC`,
+    sectionTitle("JUPITER LEND · USDC"),
+    keyValueRows([
+      ["Wallet", data.wallet],
+      ["Network", networkLabel(data.cluster)],
+      ["Wallet balance", `${data.walletBalanceUsdc} USDC`, "emphasis"],
+      ["Supplied", `${data.suppliedUsdc} USDC`, "emphasis"],
+      ["Protocol liquidity", `${data.protocolWithdrawableUsdc} USDC`],
+      ["Withdrawable now", `${data.currentlyWithdrawableUsdc} USDC`, "success"],
+    ]),
   ];
-  if (verbose)
+  if (verbose) {
     lines.push(
-      `Receipt token mint: ${data.receiptTokenMint}`,
-      `Receipt token shares: ${data.receiptTokenShares}`,
-      `Protocol supply rate (raw): ${data.protocolSupplyRateRaw}`,
-      `Protocol rewards rate (raw): ${data.protocolRewardsRateRaw}`,
+      "",
+      sectionTitle("TECHNICAL DETAILS"),
+      keyValueRows([
+        ["Receipt token mint", data.receiptTokenMint],
+        ["Receipt token shares", String(data.receiptTokenShares)],
+        ["Protocol supply rate (raw)", String(data.protocolSupplyRateRaw)],
+        ["Protocol rewards rate (raw)", String(data.protocolRewardsRateRaw)],
+      ]),
     );
+  }
   return lines.join("\n");
 }
 

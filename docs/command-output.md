@@ -23,6 +23,12 @@ accounts. It shows non-zero token balances grouped by mint, with the token
 program and number of token accounts. Use `token list` for full mint addresses
 and `token list --accounts` for individual token-account addresses.
 
+The human-readable view is a dashboard: wallet/network identity first, liquid
+SOL and token balances next, then non-liquid positions. Jupiter Lend shows
+**In wallet**, **Supplied**, and **Withdrawable now** on separate labeled rows,
+with USDC repeated on every amount. This makes clear that supplied USDC is a
+position and not the same thing as liquid wallet balance.
+
 The output includes the wallet, saved default, network, sanitized RPC endpoint,
 commitment, and refresh time. `MAINNET` is explicitly marked as real funds.
 The “Default wallet keystore” field reports whether the saved default's local
@@ -32,6 +38,12 @@ healthy wallet selected for this process.
 `show config` remains the local configuration view and does not check RPC
 health or fetch balances. Human TTY sessions show a short refresh notice while
 the chain sections load; JSON output remains free of progress text.
+
+The shell uses color only for interactive terminals; redirected output is
+plain. Set `NO_COLOR=1` to opt out. Tables switch to labeled rows on narrow
+terminals instead of truncating long account addresses. See [Reading the
+terminal output](terminal-output.md) for color behavior, responsive tables,
+and examples.
 
 RPC health and each balance section are reported separately. For example,
 status can still show the wallet and network if an RPC read fails. Such a value

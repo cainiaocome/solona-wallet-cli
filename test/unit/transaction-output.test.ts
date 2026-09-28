@@ -34,11 +34,9 @@ describe("human transaction output", () => {
     expect(receipt).toContain(
       "Wallet: daily (11111111111111111111111111111112)",
     );
-    expect(receipt).toContain("Confirmation: confirmed");
-    expect(receipt).toContain("Amount: 0.5 SOL");
-    expect(receipt).toContain(
-      `Explorer: ${transactionExplorerUrl(SIGNATURE, "devnet")}`,
-    );
+    expect(receipt).toMatch(/Confirmation\s*:\s*confirmed/);
+    expect(receipt).toMatch(/Amount\s*:\s*0.5 SOL/);
+    expect(receipt).toContain(transactionExplorerUrl(SIGNATURE, "devnet"));
     expect(transactionExplorerUrl(SIGNATURE, "mainnet")).not.toContain(
       "cluster=",
     );

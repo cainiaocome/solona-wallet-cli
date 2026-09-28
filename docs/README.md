@@ -11,7 +11,9 @@ read the documents in this order:
 3. [Command cookbook](command-cookbook.md) — practical examples, what each
    command changes, and how to automate JSON output.
 4. [Understanding CLI output](command-output.md) — startup, status, balance
-   tables, confirmations, receipts, human output, and JSON behavior.
+   tables, confirmations, receipts, human output, and JSON behavior. See also
+   [Reading the terminal output](terminal-output.md) for color and narrow-screen
+   examples.
 5. [Multiple wallets](multiple-wallets.md) — aliases, current/default selection,
    migration, backups, and recovery.
 6. [Architecture](architecture.md) — how a command travels through the source

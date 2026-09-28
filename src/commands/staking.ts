@@ -46,7 +46,13 @@ import {
   safeJson,
 } from "../errors/errors.js";
 import { confirm } from "../shell/prompt.js";
-import { shortenAddress, table } from "../output/human.js";
+import {
+  actionPreview,
+  keyValueRows,
+  networkLabel,
+  shortenAddress,
+  table,
+} from "../output/human.js";
 import { formatTransactionReceipt } from "../output/transaction.js";
 import { flagValue, hasFlag, type ParsedCommand } from "../shell/parser.js";
 import { formatSol, parseSol } from "../solana/amounts.js";
@@ -336,7 +342,18 @@ export async function stakeCreate(
   };
   context.output.preflight(
     { ok: true, preflight: summary },
-    `Action:              Native SOL stake\nWallet:              ${owner}\nValidator vote acct: ${validator.voteAccount}\nValidator node:      ${validator.nodeIdentity}\nValidator commission: ${validator.commission}%\nEffective stake:     ${formatSol(requested)} SOL\nRent reserve:        ${formatSol(rentReserve)} SOL\nTotal moved:         ${formatSol(requested + rentReserve)} SOL\nNetwork fee:         ~${formatSol(fee)} SOL\nStake account:       ${stakeAccount}\nCluster:             ${context.config.cluster}`,
+    actionPreview("NATIVE STAKE · TRANSACTION PREVIEW", [
+      ["Wallet", String(owner)],
+      ["Validator vote account", String(validator.voteAccount)],
+      ["Validator identity", String(validator.nodeIdentity)],
+      ["Commission", `${validator.commission}%`],
+      ["Effective stake", `${formatSol(requested)} SOL`, "emphasis"],
+      ["Rent reserve", `${formatSol(rentReserve)} SOL`],
+      ["Total moved", `${formatSol(requested + rentReserve)} SOL`, "warning"],
+      ["Estimated fee", `~${formatSol(fee)} SOL`],
+      ["Stake account", String(stakeAccount)],
+      ["Network", networkLabel(context.config.cluster)],
+    ]),
   );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {
@@ -572,7 +589,16 @@ export async function stakeDeactivate(
       validatorVoteAccount: info.validatorVoteAccount,
       stakeLamports: info.stakeLamports,
     },
-    `Action:        Deactivate stake\nStake account: ${stakeAccount}\nValidator:     ${info.validatorVoteAccount}\nStake:         ${formatSol(info.stakeLamports)} SOL\nDeactivation is epoch-based; funds will not be immediately withdrawable.`,
+    actionPreview("DEACTIVATE STAKE · TRANSACTION PREVIEW", [
+      ["Stake account", String(stakeAccount)],
+      ["Validator vote account", String(info.validatorVoteAccount)],
+      ["Current stake", `${formatSol(info.stakeLamports)} SOL`, "emphasis"],
+      [
+        "Important",
+        "Deactivation is epoch-based; funds are not immediately withdrawable.",
+        "warning",
+      ],
+    ]),
   );
 }
 
@@ -629,7 +655,20 @@ export async function stakeWithdraw(
       destination: owner,
       closesAccount: requested === info.lamports,
     },
-    `Action:        Withdraw stake\nStake account: ${stakeAccount}\nAmount:        ${formatSol(requested)} SOL\nDestination:   ${owner}\n${requested === info.lamports ? "This closes the stake account." : ""}`,
+    actionPreview("WITHDRAW STAKE · TRANSACTION PREVIEW", [
+      ["Stake account", String(stakeAccount)],
+      ["Amount", `${formatSol(requested)} SOL`, "emphasis"],
+      ["Destination wallet", String(owner)],
+      ...(requested === info.lamports
+        ? [
+            [
+              "Account effect",
+              "This closes the stake account.",
+              "warning",
+            ] as const,
+          ]
+        : []),
+    ]),
   );
 }
 
@@ -671,7 +710,10 @@ async function runStakeInstruction(
   };
   context.output.preflight(
     { ok: true, preflight },
-    `${human}\nNetwork fee:  ~${formatSol(fee)} SOL\nCluster:      ${context.config.cluster}`,
+    `${human}\n${keyValueRows([
+      ["Estimated fee", `~${formatSol(fee)} SOL`],
+      ["Network", networkLabel(context.config.cluster)],
+    ])}`,
   );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {

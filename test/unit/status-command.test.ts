@@ -87,6 +87,7 @@ describe("status portfolio overview", () => {
       await executeLine(context, "status");
 
       expect(output).toHaveLength(1);
+      expect(output[0]).not.toContain("\u001b[");
       const result = JSON.parse(output[0]!);
       expect(result).toMatchObject({
         ok: true,
@@ -281,8 +282,10 @@ describe("status portfolio overview", () => {
       await executeLine(context, "status");
 
       expect(output.join("")).toContain("none selected");
-      expect(output.join("")).toContain("Balances: import or select a wallet");
-      expect(output.join("")).toContain("MAINNET (real funds)");
+      expect(output.join("")).toContain(
+        "Import or select a wallet to view balances.",
+      );
+      expect(output.join("")).toContain("MAINNET · REAL FUNDS");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -374,14 +377,22 @@ describe("status portfolio overview", () => {
       await executeLine(context, "status");
 
       const rendered = output.join("");
-      expect(rendered).toContain("Positions (not included in liquid balances)");
-      expect(rendered).toContain(
-        "Native stake: no on-chain stake accounts found",
+      expect(rendered).not.toContain("\u001b[");
+      expect(rendered).toContain("POSITIONS · NOT LIQUID");
+      expect(rendered).toContain("NATIVE STAKE");
+      expect(rendered).toContain("No on-chain stake accounts found.");
+      expect(rendered).toContain("JUPITER LEND · USDC");
+      expect(rendered).toContain("In wallet");
+      expect(rendered).toContain("2 USDC");
+      expect(rendered).toContain("3 USDC");
+      expect(rendered).toContain("Withdrawable now");
+      expect(rendered).toContain("2.5 USDC");
+      expect(rendered.indexOf("LIQUID BALANCES")).toBeLessThan(
+        rendered.indexOf("POSITIONS · NOT LIQUID"),
       );
-      expect(rendered).toContain(
-        "Jupiter Lend (USDC): 2 in wallet; 3 supplied",
+      expect(rendered.indexOf("Withdrawable now")).toBeLessThan(
+        rendered.indexOf("NATIVE STAKE"),
       );
-      expect(rendered).toContain("2.5 currently withdrawable");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

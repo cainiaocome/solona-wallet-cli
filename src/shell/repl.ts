@@ -5,6 +5,7 @@ import type { CommandContext } from "../commands/context.js";
 import { completeLine } from "./completion.js";
 import { appendHistory, readHistory } from "./history.js";
 import { shortenAddress } from "../output/human.js";
+import { color, readlineColor } from "../output/terminal.js";
 import { readRegistry, resolveWallet } from "../wallet/store.js";
 import { hasFlag, parseCommand } from "./parser.js";
 import { Output } from "../output/output.js";
@@ -19,7 +20,7 @@ export async function runRepl(context: CommandContext): Promise<number> {
   if (!process.stdin.isTTY) return runPiped(context);
 
   if (!context.output.json) {
-    process.stdout.write("Solana Wallet CLI\n");
+    process.stdout.write(`${color("Solana Wallet CLI", "heading")}\n`);
     try {
       const selected = context.session.currentWalletId
         ? await resolveWallet(
@@ -32,11 +33,11 @@ export async function runRepl(context: CommandContext): Promise<number> {
         (wallet) => wallet.id === registry.defaultWalletId,
       );
       process.stdout.write(
-        `Wallet: ${selected ? `${selected.identity.alias} (${shortenAddress(selected.identity.address)})` : "none selected"}\n`,
+        `${color("Wallet", "muted")}: ${selected ? `${color(selected.identity.alias, "success")} (${shortenAddress(selected.identity.address)})` : color("none selected", "warning")}\n`,
       );
       if (defaultWallet && defaultWallet.id !== selected?.identity.id)
         process.stdout.write(
-          `Default wallet: ${defaultWallet.alias} (${shortenAddress(defaultWallet.address)})\n`,
+          `${color("Default wallet", "muted")}: ${defaultWallet.alias} (${shortenAddress(defaultWallet.address)})\n`,
         );
       if (!selected)
         process.stdout.write(
@@ -48,7 +49,7 @@ export async function runRepl(context: CommandContext): Promise<number> {
       );
     }
     process.stdout.write(
-      `Network: ${context.config.cluster.toUpperCase()}${context.config.cluster === "mainnet" ? " (real funds)" : ""}\nType \`help\` for commands, or \`status\` to refresh wallet balances.\n\n`,
+      `${color("Network", "muted")}: ${color(context.config.cluster.toUpperCase(), context.config.cluster === "mainnet" ? "warning" : "info")}${context.config.cluster === "mainnet" ? color(" · REAL FUNDS", "warning") : ""}\nType \`help\` for commands, or \`status\` to refresh wallet balances.\n\n`,
     );
   }
 
@@ -174,9 +175,9 @@ function readInput(rl: readline.Interface): Promise<string | null> {
   });
 }
 
-async function shellPrompt(context: CommandContext): Promise<string> {
+export async function shellPrompt(context: CommandContext): Promise<string> {
   if (context.walletStoreError)
-    return `sol-wallet [${context.config.cluster} | wallet-error]> `;
+    return formatShellPrompt(context.config.cluster, "wallet-error");
   try {
     const selected = context.session.currentWalletId
       ? await resolveWallet(
@@ -185,9 +186,25 @@ async function shellPrompt(context: CommandContext): Promise<string> {
         )
       : null;
     if (!selected)
-      return `sol-wallet [${context.config.cluster} | no-wallet]> `;
-    return `sol-wallet [${context.config.cluster} | ${selected.identity.alias} | ${shortenAddress(selected.identity.address)}]> `;
+      return formatShellPrompt(context.config.cluster, "no-wallet");
+    return formatShellPrompt(
+      context.config.cluster,
+      selected.identity.alias,
+      selected.identity.address,
+    );
   } catch {
-    return `sol-wallet [${context.config.cluster} | wallet-error]> `;
+    return formatShellPrompt(context.config.cluster, "wallet-error");
   }
+}
+
+/** Keep the selected cluster and wallet visible in every interactive prompt. */
+export function formatShellPrompt(
+  cluster: string,
+  wallet: string,
+  address?: string,
+): string {
+  const clusterTone = cluster === "mainnet" ? "warning" : "info";
+  const walletTone =
+    wallet === "no-wallet" || wallet === "wallet-error" ? "warning" : "success";
+  return `sol-wallet [${readlineColor(cluster, clusterTone)} | ${readlineColor(wallet, walletTone)}${address ? ` | ${readlineColor(shortenAddress(address), "muted")}` : ""}]> `;
 }

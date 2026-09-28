@@ -256,8 +256,8 @@ describe("command-scoped wallet and output context", () => {
 
       await executeLine(regular, "jupiter-lend status");
       const summary = output.join("");
-      expect(summary).toContain("Wallet balance: 2 USDC");
-      expect(summary).toContain("Currently withdrawable: 2.5 USDC");
+      expect(summary).toMatch(/Wallet balance\s*:\s*2 USDC/);
+      expect(summary).toMatch(/Withdrawable now\s*:\s*2.5 USDC/);
       expect(summary).not.toContain("Protocol supply rate (raw)");
 
       output.length = 0;
@@ -267,7 +267,7 @@ describe("command-scoped wallet and output context", () => {
         { currentWalletId: wallet.id },
       );
       await executeLine(verbose, "jupiter-lend status");
-      expect(output.join("")).toContain("Protocol supply rate (raw): 123");
+      expect(output.join("")).toMatch(/Protocol supply rate \(raw\)\s*:\s*123/);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

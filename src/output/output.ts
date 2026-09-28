@@ -1,5 +1,6 @@
 import { stringifyJson } from "./json.js";
 import { redact, type AppError } from "../errors/errors.js";
+import { color } from "./terminal.js";
 
 /**
  * Output boundary shared by all commands.
@@ -33,18 +34,24 @@ export class Output {
   print(value: unknown, human?: string): void {
     const decorated = this.decorate(value);
     const identity = this.getWallet?.();
+    const walletLine = identity
+      ? new RegExp(
+          `(^|\\n)([ \\t]*Wallet[ \\t]*:[ \\t]*)${escapeRegExp(identity.address)}(?=[ \\t]*(?:\\n|$))`,
+          "g",
+        )
+      : null;
     const renderedHuman =
-      identity && human
-        ? human.replaceAll(
-            `Wallet: ${identity.address}`,
-            `Wallet: ${identity.alias} (${identity.address})`,
+      identity && human && walletLine
+        ? human.replace(
+            walletLine,
+            `$1$2${identity.alias} (${identity.address})`,
           )
         : human;
+    const hasWalletIdentity = renderedHuman
+      ?.split("\n")
+      .some((line) => /^\s*(?:Selected )?Wallet\s*:/.test(line));
     const prefix =
-      identity &&
-      !renderedHuman?.includes(
-        `Wallet: ${identity.alias} (${identity.address})`,
-      )
+      identity && !hasWalletIdentity
         ? `Wallet: ${identity.alias} (${identity.address})\n`
         : "";
     if (this.options.json)
@@ -100,9 +107,17 @@ export class Output {
     };
     if (this.options.json) process.stderr.write(`${stringifyJson(payload)}\n`);
     else {
-      process.stderr.write(`Error: ${error.message}\n`);
+      process.stderr.write(
+        `${color("Error", "error", { stream: "stderr" })}: ${error.message}\n`,
+      );
       if (this.options.verbose && error.details !== undefined)
-        process.stderr.write(`Details: ${stringifyJson(error.details)}\n`);
+        process.stderr.write(
+          `${color("Details", "muted", { stream: "stderr" })}: ${stringifyJson(error.details)}\n`,
+        );
     }
   }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

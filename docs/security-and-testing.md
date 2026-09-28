@@ -124,6 +124,9 @@ transactions. Token-send Docker E2E covers both missing and existing
 associated token accounts. Its mock RPC rejects a data query without base64
 when the fixture is 165 bytes, reproducing the real JSON-RPC account-size
 constraint deterministically.
+Terminal presentation tests additionally cover color opt-out and TTY detection,
+readline-safe prompt styling, aligned versus narrow table output, full-address
+retention, and the rule that JSON contains no ANSI styling.
 
 The source test command does not prove that a Docker image works. The image
 has a separate build and E2E path.
@@ -140,6 +143,14 @@ builder is deprecated, npm reported peer/install-script warnings, and its
 dependency audit reported 15 findings (8 moderate, 7 high). This change did not
 modify dependencies or attempt to resolve those findings; they did not block
 the build or tests.
+
+For the terminal-presentation refresh on 2026-09-28, all 100 tests across 21
+files passed; TypeScript lint/build, Prettier, Black, and `git diff --check`
+passed. The `linux/amd64` image built successfully and all 22 packaged Docker
+E2E tests passed, including the color-enabled PTY prompt and the `NO_COLOR`
+case. No Devnet or Mainnet transaction was submitted. The same pre-existing
+Docker/npm/audit warnings above remained; no dependency or system package was
+installed or changed for this work.
 
 Network-facing CLI behavior also has a separate real-chain suite in
 [the Devnet E2E guide](devnet-e2e-plan.md). It runs on a schedule or manually,

@@ -26,7 +26,12 @@ import { requireWallet } from "./read-only.js";
 import { requireSelectedWallet } from "./read-only.js";
 import type { CommandContext } from "./context.js";
 import { formatTransactionReceipt } from "../output/transaction.js";
-import { shortenAddress } from "../output/human.js";
+import { color } from "../output/terminal.js";
+import {
+  actionPreview,
+  networkLabel,
+  shortenAddress,
+} from "../output/human.js";
 
 /**
  * SOL transfer command.
@@ -97,7 +102,13 @@ export async function sendSol(
     cluster: context.config.cluster,
     dryRun,
   };
-  const human = `Action:       Send SOL\nWallet:       ${source}\nTo:           ${destination}\nAmount:       ${formatSol(lamports)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nNetwork:      ${context.config.cluster}`;
+  const human = actionPreview("SEND SOL · TRANSACTION PREVIEW", [
+    ["Wallet", `${selectedWallet.identity.alias} (${source})`],
+    ["Destination", String(destination)],
+    ["Amount", `${formatSol(lamports)} SOL`, "emphasis"],
+    ["Estimated fee", `~${formatSol(fee)} SOL`],
+    ["Network", networkLabel(context.config.cluster)],
+  ]);
   context.output.preflight({ ok: true, preflight: summary }, human);
 
   const simulation = await rpcRequest(
@@ -191,7 +202,11 @@ export async function confirmSignature(
   try {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (showProgress && attempt === 0) {
-        process.stderr.write("Waiting for transaction confirmation");
+        process.stderr.write(
+          color("Waiting for transaction confirmation", "muted", {
+            stream: "stderr",
+          }),
+        );
         showedProgress = true;
       } else if (showProgress && attempt > 0 && attempt % 4 === 0) {
         process.stderr.write(".");

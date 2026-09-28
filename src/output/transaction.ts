@@ -1,3 +1,6 @@
+import { keyValueRows, networkLabel } from "./human.js";
+import { color, type Tone } from "./terminal.js";
+
 export interface TransactionReceiptOptions {
   action: string;
   wallet?: { alias: string; address: string };
@@ -12,17 +15,29 @@ export interface TransactionReceiptOptions {
 export function formatTransactionReceipt(
   options: TransactionReceiptOptions,
 ): string {
+  const summary: [string, string, Tone?][] = [
+    ["Network", networkLabel(options.cluster)],
+    ["Confirmation", options.confirmation, "success"],
+    ["Slot", String(options.slot)],
+    ...(options.details ?? []).map(([label, value]): [string, string] => [
+      label,
+      value,
+    ]),
+  ];
   return [
-    `${options.action} confirmed`,
+    color(`${options.action} confirmed`, "success"),
     ...(options.wallet
-      ? [`Wallet: ${options.wallet.alias} (${options.wallet.address})`]
+      ? [
+          keyValueRows([
+            ["Wallet", `${options.wallet.alias} (${options.wallet.address})`],
+          ]),
+        ]
       : []),
-    `Network: ${options.cluster}`,
-    `Confirmation: ${options.confirmation}`,
-    `Slot: ${options.slot}`,
-    ...(options.details ?? []).map(([label, value]) => `${label}: ${value}`),
-    `Signature: ${options.signature}`,
-    `Explorer: ${transactionExplorerUrl(options.signature, options.cluster)}`,
+    keyValueRows(summary),
+    keyValueRows([
+      ["Signature", options.signature],
+      ["Explorer", transactionExplorerUrl(options.signature, options.cluster)],
+    ]),
   ].join("\n");
 }
 

@@ -15,6 +15,7 @@ import { clusterSchema, commitmentSchema } from "./config/schema.js";
 import { asAppError, ConfigError, redact } from "./errors/errors.js";
 import { hasFlag, parseCommand } from "./shell/parser.js";
 import type { selectWallet as selectWalletType } from "./wallet/store.js";
+import { color } from "./output/terminal.js";
 
 interface StartupOptions extends ConfigOverrides {
   command?: string;
@@ -95,7 +96,9 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       const appError = asAppError(error);
       walletStoreError = appError;
       if (process.stdin.isTTY && !options.json)
-        process.stderr.write(`Wallet store: ${appError.message}\n`);
+        process.stderr.write(
+          `${color("Wallet store", "warning", { stream: "stderr" })}: ${appError.message}\n`,
+        );
     }
     const context = createCommandContext(
       config,
@@ -133,7 +136,10 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
           ...(appError.details ? { details: redact(appError.details) } : {}),
         })}\n`,
       );
-    } else process.stderr.write(`Error: ${appError.message}\n`);
+    } else
+      process.stderr.write(
+        `${color("Error", "error", { stream: "stderr" })}: ${appError.message}\n`,
+      );
     return appError.exitCode;
   }
 }

@@ -45,7 +45,11 @@ import {
   confirmSignature,
 } from "./send.js";
 import { formatTransactionReceipt } from "../output/transaction.js";
-import { shortenAddress } from "../output/human.js";
+import {
+  actionPreview,
+  networkLabel,
+  shortenAddress,
+} from "../output/human.js";
 
 /**
  * SPL/Token-2022 transfer handler.
@@ -220,7 +224,17 @@ export async function sendToken(
   };
   context.output.preflight(
     { ok: true, preflight: summary },
-    `Action:       Send token\nWallet:       ${owner}\nMint:         ${mint}\nAmount:       ${formatUnits(rawAmount, mintInfo.decimals)}\nDestination:  ${destinationOwner}\nDestination ATA: ${destinationAta}\nATA cost:     ${formatSol(ataCreationCost)} SOL\nNetwork fee:  ~${formatSol(fee)} SOL\nNetwork:      ${context.config.cluster}`,
+    actionPreview("TOKEN TRANSFER · TRANSACTION PREVIEW", [
+      ["Wallet", `${selectedWallet.identity.alias} (${owner})`],
+      ["Token mint", String(mint)],
+      ["Token program", mintInfo.program],
+      ["Amount", formatUnits(rawAmount, mintInfo.decimals), "emphasis"],
+      ["Destination", String(destinationOwner)],
+      ["Destination token account", String(destinationAta)],
+      ["Account rent", `${formatSol(ataCreationCost)} SOL`],
+      ["Estimated fee", `~${formatSol(fee)} SOL`],
+      ["Network", networkLabel(context.config.cluster)],
+    ]),
   );
   const simulation = await rpcRequest(
     rpc.simulateTransaction(getBase64EncodedWireTransaction(unsigned), {

@@ -1,7 +1,14 @@
 import { formatSol, formatUnits } from "../solana/amounts.js";
 import { assertRpcCluster, rpcRequest } from "../solana/rpc.js";
 import { aggregateTokenAccounts, getTokenAccounts } from "../solana/tokens.js";
-import { table, shortenAddress } from "../output/human.js";
+import {
+  keyValueRows,
+  networkLabel,
+  sectionTitle,
+  shortenAddress,
+  table,
+} from "../output/human.js";
+import { color } from "../output/terminal.js";
 import {
   asAppError,
   KeystoreError,
@@ -79,41 +86,16 @@ function formatWalletTable(
     health: string;
   }>,
 ): string {
-  const headers = ["CURRENT", "DEFAULT", "ALIAS", "ADDRESS", "HEALTH"];
-  const widths = [
-    headers[0]!.length,
-    headers[1]!.length,
-    Math.max(
-      headers[2]!.length,
-      ...wallets.map((wallet) => wallet.alias.length),
-    ),
-    Math.max(
-      headers[3]!.length,
-      ...wallets.map((wallet) => wallet.address.length),
-    ),
-    Math.max(
-      headers[4]!.length,
-      ...wallets.map((wallet) => wallet.health.length),
-    ),
-  ];
-  const rows = wallets.map((wallet) =>
-    [
+  return `${table(
+    wallets.map((wallet) => [
       wallet.current ? "*" : "",
       wallet.default ? "*" : "",
       wallet.alias,
       wallet.address,
       wallet.health,
-    ]
-      .map((value, index) => value.padEnd(widths[index]!))
-      .join(" "),
-  );
-  return (
-    [
-      headers.map((value, index) => value.padEnd(widths[index]!)).join(" "),
-      widths.map((width) => "-".repeat(width)).join(" "),
-      ...rows,
-    ].join("\n") + "\n* marks the current or saved-default wallet."
-  );
+    ]),
+    ["CURRENT", "DEFAULT", "ALIAS", "ADDRESS", "HEALTH"],
+  )}\n* marks the current or saved-default wallet.`;
 }
 
 export async function walletInfo(
@@ -139,15 +121,6 @@ export async function walletInfo(
     entry.id,
     registry,
   );
-  const details = [
-    ["Alias", entry.alias],
-    ["Address", selected.identity.address],
-    ["Cluster", context.config.cluster],
-    ["Private key", "encrypted at rest"],
-    ["Current", String(context.session.currentWalletId === entry.id)],
-    ["Default", String(registry.defaultWalletId === entry.id)],
-  ] as const;
-  const labelWidth = Math.max(...details.map(([label]) => label.length));
   context.output.print(
     {
       ok: true,
@@ -158,9 +131,22 @@ export async function walletInfo(
       default: registry.defaultWalletId === entry.id,
       encrypted: true,
     },
-    details
-      .map(([label, value]) => `${label.padEnd(labelWidth)}: ${value}`)
-      .join("\n"),
+    keyValueRows([
+      ["Alias", entry.alias, "emphasis"],
+      ["Address", selected.identity.address],
+      ["Network", networkLabel(context.config.cluster)],
+      ["Private key", "encrypted at rest"],
+      [
+        "Current",
+        String(context.session.currentWalletId === entry.id),
+        context.session.currentWalletId === entry.id ? "success" : "muted",
+      ],
+      [
+        "Default",
+        String(registry.defaultWalletId === entry.id),
+        registry.defaultWalletId === entry.id ? "success" : "muted",
+      ],
+    ]),
   );
 }
 
@@ -552,7 +538,10 @@ export async function status(context: CommandContext): Promise<void> {
     | null = null;
   const showProgress = !context.output.json && Boolean(process.stderr.isTTY);
 
-  if (showProgress) process.stderr.write("Refreshing wallet status…");
+  if (showProgress)
+    process.stderr.write(
+      color("Refreshing wallet status…", "muted", { stream: "stderr" }),
+    );
   try {
     const rpc = context.getClient().rpc;
     await assertRpcCluster(rpc, context.config.cluster);
@@ -712,67 +701,145 @@ export async function status(context: CommandContext): Promise<void> {
       ? table(
           tokenBalances.assets.map((asset) => [
             context.output.verbose ? asset.mint : shortenAddress(asset.mint),
-            `${asset.amount}`,
+            asset.amount,
             asset.program,
             String(asset.accountCount),
           ]),
-          ["MINT", "BALANCE", "TOKEN PROGRAM", "ACCOUNTS"],
+          ["TOKEN MINT", "BALANCE", "PROGRAM", "ACCOUNTS"],
         )
-      : "No non-zero token balances.";
+      : tokenBalances?.status === "unavailable"
+        ? "Unavailable — check the RPC endpoint and retry status."
+        : "No non-zero token balances.";
   const defaultLabel = defaultWallet
     ? current?.id === defaultWallet.id
       ? `${defaultWallet.alias} (same as current)`
       : `${defaultWallet.alias} (${defaultWallet.address})`
     : "none";
-  const positionLines = selected
-    ? [
-        "Positions (not included in liquid balances):",
-        stakePosition?.status === "available"
-          ? `Native stake: ${stakePosition.accountCount ? `${formatSol(stakePosition.delegatedLamports)} SOL delegated across ${stakePosition.accountCount} account(s)` : "no on-chain stake accounts found"}${
-              Object.keys(stakePosition.stateCounts).length
-                ? `; states: ${Object.entries(stakePosition.stateCounts)
-                    .map(([state, count]) => `${state} ${count}`)
-                    .join(", ")}`
-                : ""
-            }${stakePosition.localHints ? `; local recovery hints: ${stakePosition.localHints}` : ""}`
-          : "Native stake: unavailable; check RPC and retry status.",
-        jupiterPosition?.status === "available"
-          ? `Jupiter Lend (USDC): ${jupiterPosition.walletBalanceUsdc} in wallet; ${jupiterPosition.suppliedUsdc} supplied; ${jupiterPosition.currentlyWithdrawableUsdc} currently withdrawable`
-          : jupiterPosition?.status === "not_supported"
-            ? "Jupiter Lend: mainnet only (not queried on devnet)"
-            : "Jupiter Lend: unavailable; check RPC/protocol access and retry status.",
-      ]
-    : [];
-  const human = [
-    `Wallet: ${current ? `${current.alias} (${current.address})` : "none selected"}`,
-    `Default wallet: ${defaultLabel}`,
-    `Default wallet keystore: ${defaultWalletHealth ?? "not configured"}`,
-    `Network: ${context.config.cluster.toUpperCase()}${context.config.cluster === "mainnet" ? " (real funds)" : ""}`,
-    `RPC: ${rpcState.status === "reachable" ? "reachable; network verified" : "unavailable or on the wrong network"} (${rpcUrl})`,
-    `Commitment: ${context.config.commitment}`,
+  const network = networkLabel(context.config.cluster);
+  const rpcLabel =
+    rpcState.status === "reachable"
+      ? color("Verified", "success")
+      : color("Unavailable / wrong network", "error");
+  // Keep the interactive reading order deliberate: identity, liquid assets,
+  // then protocol/stake positions that should not be mistaken for cash.
+  const lines = [
+    sectionTitle("WALLET & NETWORK"),
+    keyValueRows([
+      [
+        "Wallet",
+        current ? `${current.alias} (${current.address})` : "none selected",
+      ],
+      ["Network", network],
+      ["RPC", `${rpcLabel} · ${rpcUrl}`],
+      ["Commitment", context.config.commitment],
+    ]),
+    "",
+    sectionTitle("LIQUID BALANCES"),
+    selected
+      ? keyValueRows([
+          [
+            "SOL",
+            solBalance?.status === "available"
+              ? `${solBalance.amount} SOL`
+              : "Unavailable — check RPC and retry status.",
+            solBalance?.status === "available" ? "emphasis" : "warning",
+          ],
+        ])
+      : "Import or select a wallet to view balances.",
+    "",
+    sectionTitle("TOKENS"),
+    selected ? tokenTable : "Not loaded — no wallet is selected.",
+    "",
+    sectionTitle("POSITIONS · NOT LIQUID"),
     ...(selected
       ? [
-          `SOL balance: ${solBalance?.status === "available" ? `${solBalance.amount} SOL` : "unavailable"}`,
-          "Token balances:",
-          tokenBalances?.status === "unavailable"
-            ? "Unavailable; check the RPC endpoint and retry status."
-            : tokenTable,
+          sectionTitle("JUPITER LEND · USDC"),
+          jupiterPosition?.status === "available"
+            ? keyValueRows([
+                [
+                  "In wallet",
+                  `${jupiterPosition.walletBalanceUsdc} USDC`,
+                  "emphasis",
+                ],
+                [
+                  "Supplied",
+                  `${jupiterPosition.suppliedUsdc} USDC`,
+                  "emphasis",
+                ],
+                [
+                  "Withdrawable now",
+                  `${jupiterPosition.currentlyWithdrawableUsdc} USDC`,
+                  "success",
+                ],
+              ])
+            : jupiterPosition?.status === "not_supported"
+              ? "Mainnet only; not queried on devnet."
+              : "Unavailable — check RPC/protocol access and retry status.",
+          "",
+          sectionTitle("NATIVE STAKE"),
+          stakePosition?.status === "available"
+            ? stakePosition.accountCount
+              ? keyValueRows([
+                  [
+                    "Delegated",
+                    `${formatSol(stakePosition.delegatedLamports)} SOL`,
+                    "emphasis",
+                  ],
+                  ["Accounts", String(stakePosition.accountCount)],
+                  [
+                    "States",
+                    Object.entries(stakePosition.stateCounts)
+                      .map(([state, count]) => `${state}: ${count}`)
+                      .join(" · "),
+                  ],
+                  ...(stakePosition.localHints
+                    ? [
+                        [
+                          "Local recovery hints",
+                          String(stakePosition.localHints),
+                        ] as const,
+                      ]
+                    : []),
+                ])
+              : "No on-chain stake accounts found."
+            : "Unavailable — check RPC and retry status.",
         ]
-      : ["Balances: import or select a wallet to view its balances."]),
-    ...positionLines,
+      : ["Positions are not loaded until a wallet is selected."]),
+    "",
+    sectionTitle("WALLET DEFAULTS & REFRESH"),
+    keyValueRows([
+      ["Saved default", defaultLabel],
+      ["Default keystore", defaultWalletHealth ?? "not configured"],
+      [
+        "Health",
+        health.toUpperCase(),
+        health === "healthy"
+          ? "success"
+          : health === "degraded"
+            ? "warning"
+            : "error",
+      ],
+      ["Updated", updatedAt],
+    ]),
     ...(health === "degraded"
-      ? selected
-        ? ["Some balance data could not be loaded; unavailable is not zero."]
-        : []
+      ? [
+          color(
+            "Some data could not be loaded. Unavailable is not zero.",
+            "warning",
+          ),
+        ]
       : health === "unavailable"
         ? [
-            selected
-              ? "Balances were not loaded because the RPC could not be verified."
-              : "Resolve the RPC/network issue before requesting chain data.",
+            color(
+              "RPC verification failed; chain balances were not loaded.",
+              "error",
+            ),
           ]
         : []),
-    `Updated: ${updatedAt}`,
-  ].join("\n");
+  ];
+  const human = lines
+    .filter((line, index) => line !== "" || lines[index - 1] !== "")
+    .join("\n");
   context.output.print(
     {
       ok: true,

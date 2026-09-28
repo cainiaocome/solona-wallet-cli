@@ -1,30 +1,51 @@
-const HELP: Record<string, string> = {
-  "": `Commands:
-  wallet import <alias> | wallet list | wallet info [alias] | wallet use <alias> | wallet default <alias> | wallet rename <old> <new>
-  wallet delete <alias> [--yes] | wallet change-passphrase <alias>
-  wallet migrate <alias> | wallet recover <uuid> <alias>
-  address | balance
-  send <destination> <amount>
-  token list [--accounts] | token balance <mint> | token send <mint> <destination> <amount>
-  validators [--limit n] [--include-delinquent] [--max-commission percent]
-    (current validators only by default)
-  stake create <amount> --validator <vote-account>
-  stake list | stake deactivate <stake-account> | stake withdraw <stake-account> [--amount n]
-  jupiter-lend status | jupiter-lend deposit <amount> | jupiter-lend withdraw <amount> | jupiter-lend withdraw --all
-  tx inspect <signature>
-  set cluster <mainnet|devnet> | set rpc-url <url> | set commitment <level>
-  status | show config | history | clear | help [topic] | exit
+import { color } from "../output/terminal.js";
 
-Startup: sol-wallet [--wallet <alias>] [--cluster mainnet|devnet] [-c <command>]
-Use \`sol-wallet --help\` for startup options.`,
-  wallet: `wallet import <alias> [--keypair-file <path>]
+const HELP: Record<string, string> = {
+  "": `COMMANDS
+
+WALLETS
+  wallet list                 List wallets and mark current/default
+  wallet info [alias]         Show a wallet's public address and health
+  wallet use <alias>          Select a wallet for this process
+  wallet default <alias>      Choose the default for future processes
+  wallet import <alias>       Import a keypair into encrypted local storage
+  wallet rename <old> <new>   Rename a local wallet alias
+  wallet delete <alias> [--yes] (delete local keystore; asks first)
+  wallet change-passphrase <alias>
+  wallet migrate <alias>      Migrate an existing keystore.json
+  wallet recover <uuid> <alias>
+
+BALANCES AND TRANSFERS
+  status                      Refresh wallet, token, and position overview
+  address | balance           Show the selected address or SOL balance
+  token list [--accounts]     List tokens; optionally show token accounts
+  token balance <mint>        Show a token balance by mint address
+  send <destination> <amount> Send SOL
+  token send <mint> <to> <amount>
+
+STAKING AND LENDING
+  validators                  Browse current validators
+  stake                       Create, list, deactivate, or withdraw stake
+  jupiter-lend                View or manage Jupiter Lend USDC
+
+SETTINGS AND UTILITIES
+  set cluster <mainnet|devnet>
+  set rpc-url <url> | set commitment <level>
+  show config | tx inspect <signature> | history | clear
+  help [topic] | exit
+
+Use help wallet, help status, help token, help stake, or help jupiter-lend
+for syntax and options. Startup: sol-wallet [--wallet <alias>] [--cluster <network>] [-c <command>].
+See sol-wallet --help for startup flags.`,
+  wallet: `WALLET COMMANDS
+wallet import <alias> [--keypair-file <path>]
 wallet list
 wallet info [<alias>]
 wallet use <alias>                 (current process only)
 wallet default <alias>             (future processes)
 wallet rename <old> <new>
-wallet delete <alias> [--yes]       (local keystore only; --yes skips confirmation)
-wallet change-passphrase <alias>   (hidden prompts; old and new passphrases)
+wallet delete <alias> [--yes]      (local keystore only; --yes skips confirmation)
+wallet change-passphrase <alias>  (hidden prompts; old and new passphrases)
 wallet migrate <alias>             (existing keystore.json)
 wallet recover <uuid> <alias>      (orphan UUID keystore)
 
@@ -42,18 +63,39 @@ Deleting a wallet never removes chain assets. Separate backups and stake recover
   validators:
     "validators [--limit <n>] [--include-delinquent] [--max-commission <percent>]\nDelinquent validators are excluded by default; use --include-delinquent to include them.",
   stake:
-    "stake create <amount> --validator <vote-account>\nstake list\nstake deactivate <stake-account>\nstake withdraw <stake-account> [--amount <amount>]",
+    "stake create <amount> --validator <vote-account> [--dry-run] [--yes]\nstake list\nstake deactivate <stake-account> [--dry-run] [--yes]\nstake withdraw <stake-account> [--amount <amount>] [--dry-run] [--yes]",
   "jupiter-lend":
     "jupiter-lend status\njupiter-lend deposit <amount> [--dry-run] [--yes]\njupiter-lend withdraw <amount> [--dry-run] [--yes]\njupiter-lend withdraw --all [--dry-run] [--yes]",
   tx: "tx inspect <signature>\nShows a human summary; add --json to see the complete RPC response.",
   set: "set cluster <mainnet|devnet>\nset rpc-url <url>\nset commitment <processed|confirmed|finalized>",
   status:
-    "status\nChecks the configured RPC/network and shows the selected wallet's SOL and non-zero token balances. Failed balance reads are marked unavailable, never zero. Use show config for local configuration details.",
+    "status\nChecks the configured RPC/network and shows liquid SOL and non-zero token balances, followed by positions such as Jupiter Lend and native stake. Failed reads are marked unavailable, never zero. Use show config for local configuration details.",
 };
 
+/** Human-oriented command index and focused syntax help for the REPL. */
 export function helpText(topic?: string): string {
   if (!topic) return HELP[""]!;
   return (
     HELP[topic] ?? `No detailed help is available for \`${topic}\`. Try help.`
   );
+}
+
+/** Add visual hierarchy to help output while leaving its content unchanged. */
+export function styleHelpText(value: string): string {
+  const headings = new Set([
+    "COMMANDS",
+    "WALLETS",
+    "BALANCES AND TRANSFERS",
+    "STAKING AND LENDING",
+    "SETTINGS AND UTILITIES",
+    "WALLET COMMANDS",
+  ]);
+  return value
+    .split("\n")
+    .map((line, index) =>
+      headings.has(line) || (index === 0 && !line.startsWith(" "))
+        ? color(line, "heading")
+        : line,
+    )
+    .join("\n");
 }
