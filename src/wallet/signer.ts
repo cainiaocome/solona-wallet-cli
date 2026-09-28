@@ -6,7 +6,7 @@ import type {
   TransactionWithLifetime,
   TransactionWithinSizeLimit,
 } from "@solana/kit";
-import { address, createKeyPairSignerFromBytes } from "@solana/kit";
+import { createKeyPairSignerFromBytes } from "@solana/kit";
 import { readKeystoreFile, unlockFileAndValidate } from "./keystore.js";
 import type { SelectedWallet } from "./store.js";
 import { KeystoreError } from "../errors/errors.js";

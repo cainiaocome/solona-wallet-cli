@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   address,
   appendTransactionMessageInstruction,
@@ -17,6 +17,42 @@ import {
 } from "../../src/commands/send.js";
 
 describe("transaction submission safety", () => {
+  it("allows longer finalized confirmation and defers history lookups", async () => {
+    vi.useFakeTimers();
+    try {
+      let lookups = 0;
+      const options: unknown[] = [];
+      const rpc = {
+        getSignatureStatuses: (_signatures: unknown, config?: unknown) => {
+          lookups += 1;
+          options.push(config);
+          return { send: async () => ({ value: [null] }) };
+        },
+      } as never;
+
+      const result = confirmSignature(
+        rpc,
+        "offline-test-signature",
+        "finalized",
+      ).then(
+        () => ({ ok: true as const }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(lookups).toBeGreaterThan(60);
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      const outcome = await result;
+      expect(outcome.ok).toBe(false);
+      expect(lookups).toBe(120);
+      expect(options.filter(Boolean)).toEqual([
+        { searchTransactionHistory: true },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("retains the local transaction signature when the RPC accepts then drops its response", async () => {
     const secret = await normalizeSecretKey(
       Uint8Array.from({ length: 32 }, (_, index) => index + 1),

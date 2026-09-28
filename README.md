@@ -118,7 +118,24 @@ The provider-specific `jupiter-lend` command name keeps this Jupiter integration
 
 ## Configuration and files
 
-Configuration precedence is CLI flag, environment/`.env`, `config.json`, then built-in defaults. Supported non-secret values are `SOL_WALLET_CLUSTER`, `SOL_WALLET_RPC_URL`, `SOL_WALLET_COMMITMENT`, and `SOL_WALLET_CONFIG_DIR`. Never put key material or passwords in `.env`.
+Configuration precedence is CLI flag, environment/`.env`, `config.json`, then built-in defaults. Supported settings are `SOL_WALLET_CLUSTER`, `SOL_WALLET_RPC_URL`, `SOL_WALLET_COMMITMENT`, and `SOL_WALLET_CONFIG_DIR`. Never put key material or passwords in `.env`.
+
+The CLI loads `.env` from its current working directory. The `scripts/sol-wallet`
+wrapper runs the CLI inside the image and mounts only the wallet configuration
+directory, so it does not read a host `.env` file. To configure the wrapper,
+export the supported network settings in the host shell; the wrapper forwards
+them to the container when set:
+
+```bash
+export SOL_WALLET_CLUSTER=devnet
+export SOL_WALLET_RPC_URL=https://api.devnet.solana.com
+export SOL_WALLET_COMMITMENT=confirmed
+scripts/sol-wallet
+```
+
+`SOL_WALLET_CONFIG_DIR` selects the host directory mounted at the container's
+wallet configuration path; it is not passed through as a container environment
+setting.
 
 The default directory is `~/.config/sol-wallet`:
 

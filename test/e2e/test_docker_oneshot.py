@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-from mock_rpc import Handler, start_server
+from mock_rpc import Handler, TEST_MINT, start_server
 from keypair import write_keypair
 
 
@@ -281,6 +281,42 @@ class DockerOneShotTests(unittest.TestCase):
         self.assertIn("preflight", payload)
         self.assertIn("simulateTransaction", Handler.state.methods)
         self.assertNotIn("sendTransaction", Handler.state.methods)
+
+    def test_token_send_with_absent_and_existing_destination_ata(self):
+        Handler.state.token_owner = "FAe4sisG95oZ42w7buUn5qEE4TAnfTTFPiguZUHmhiF"
+        destination = "11111111111111111111111111111118"
+        try:
+            for exists in (False, True):
+                Handler.state.destination_token_account_exists = exists
+                Handler.state.account_info_requests.clear()
+                Handler.state.methods.clear()
+                result = self.run_wallet(
+                    f"token send {TEST_MINT} {destination} 1 --dry-run",
+                    json_output=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                payload = json.loads(result.stdout)
+                self.assertEqual(payload["status"], "simulated")
+                expected_rent = "0" if exists else "2039280"
+                self.assertEqual(
+                    payload["preflight"]["ataCreationCostLamports"], expected_rent
+                )
+                destination_lookups = [
+                    (account, encoding)
+                    for account, encoding in Handler.state.account_info_requests
+                    if account != TEST_MINT
+                ]
+                self.assertEqual(len(destination_lookups), 1)
+                self.assertEqual(destination_lookups[0][1], "base64")
+                self.assertEqual(
+                    "getMinimumBalanceForRentExemption" in Handler.state.methods,
+                    not exists,
+                )
+                self.assertIn("simulateTransaction", Handler.state.methods)
+                self.assertNotIn("sendTransaction", Handler.state.methods)
+        finally:
+            Handler.state.token_owner = None
+            Handler.state.destination_token_account_exists = False
 
     def test_simulation_failure_blocks_broadcast(self):
         Handler.state.methods.clear()

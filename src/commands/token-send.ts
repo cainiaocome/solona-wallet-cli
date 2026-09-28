@@ -129,6 +129,7 @@ export async function sendToken(
   const destinationAccount = await rpcRequest(
     rpc.getAccountInfo(destinationAta, {
       commitment: context.config.commitment,
+      encoding: "base64",
     }),
     "destination token account lookup",
   );

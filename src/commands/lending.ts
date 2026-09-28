@@ -177,10 +177,11 @@ async function runLendInstruction(
   human: string,
   refresh: () => Promise<JupiterLendPosition>,
 ): Promise<void> {
+  const rpc = context.getClient().rpc;
   const instructions: WalletInstruction[] = [];
   const destination = address(plan.destinationTokenAccount);
   const destinationInfo = await rpcRequest(
-    context.getClient().rpc.getAccountInfo(destination, {
+    rpc.getAccountInfo(destination, {
       commitment: context.config.commitment,
       // Token accounts contain 165 bytes; Kit's omitted-encoding overload
       // requests legacy base58, which the RPC rejects above 129 bytes.
@@ -192,14 +193,9 @@ async function runLendInstruction(
   if (!destinationInfo.value) {
     ataCreationCost = BigInt(
       await rpcRequest(
-        context
-          .getClient()
-          .rpc.getMinimumBalanceForRentExemption(
-            LEGACY_SPL_TOKEN_ACCOUNT_SPACE,
-            {
-              commitment: context.config.commitment,
-            },
-          ),
+        rpc.getMinimumBalanceForRentExemption(LEGACY_SPL_TOKEN_ACCOUNT_SPACE, {
+          commitment: context.config.commitment,
+        }),
         "Jupiter Lend token account rent lookup",
       ),
     );
@@ -218,7 +214,6 @@ async function runLendInstruction(
     );
   }
   instructions.push(...plan.instructions);
-  const rpc = context.getClient().rpc;
   const latest = await rpcRequest(
     rpc.getLatestBlockhash({ commitment: context.config.commitment }),
     "recent blockhash lookup",

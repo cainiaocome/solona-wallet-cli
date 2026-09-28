@@ -32,6 +32,8 @@ class State:
     methods: list[str] = []
     transactions: list[str] = []
     token_owner: str | None = None
+    destination_token_account_exists = False
+    account_info_requests: list[tuple[str, object]] = []
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -90,27 +92,52 @@ class Handler(BaseHTTPRequestHandler):
             }
         elif method == "getAccountInfo":
             account = params[0]
-            result = {
-                "context": {"slot": 100},
-                "value": (
-                    {
-                        "data": {
-                            "program": "spl-token",
-                            "parsed": {
-                                "type": "mint",
-                                "info": {"decimals": 6, "supply": "1000000"},
-                            },
-                            "space": 82,
+            options = (
+                params[1] if len(params) > 1 and isinstance(params[1], dict) else {}
+            )
+            self.state.account_info_requests.append((account, options.get("encoding")))
+            if account == TEST_MINT:
+                value = {
+                    "data": {
+                        "program": "spl-token",
+                        "parsed": {
+                            "type": "mint",
+                            "info": {"decimals": 6, "supply": "1000000"},
                         },
-                        "executable": False,
-                        "lamports": 1,
-                        "owner": TEST_TOKEN_PROGRAM,
-                        "rentEpoch": 0,
+                        "space": 82,
+                    },
+                    "executable": False,
+                    "lamports": 1,
+                    "owner": TEST_TOKEN_PROGRAM,
+                    "rentEpoch": 0,
+                }
+            elif self.state.destination_token_account_exists:
+                if options.get("encoding") != "base64":
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": request.get("id"),
+                        "error": {
+                            "code": -32600,
+                            "message": "Account data larger than 128 bytes requires base64 encoding",
+                        },
                     }
-                    if account == TEST_MINT
-                    else None
-                ),
-            }
+                    encoded = json.dumps(response).encode()
+                    self.send_response(200)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(encoded)))
+                    self.end_headers()
+                    self.wfile.write(encoded)
+                    return
+                value = {
+                    "data": [base64.b64encode(bytes(165)).decode("ascii"), "base64"],
+                    "executable": False,
+                    "lamports": 2_039_280,
+                    "owner": TEST_TOKEN_PROGRAM,
+                    "rentEpoch": 0,
+                }
+            else:
+                value = None
+            result = {"context": {"slot": 100}, "value": value}
         elif method == "getVoteAccounts":
             result = {
                 "current": [

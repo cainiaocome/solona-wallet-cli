@@ -51,6 +51,7 @@ export async function importWallet(
         { ok: true, address: publicKey, alias },
         `Derived address for '${alias}': ${publicKey}`,
       );
+    else process.stderr.write(`Derived address for '${alias}': ${publicKey}\n`);
     if (!(await confirm("Is this the expected wallet address?")))
       throw new KeystoreError("Wallet import cancelled.");
     const passphrase = await readSecret("New keystore passphrase: ");

@@ -76,7 +76,12 @@ export function completeLine(
     candidates = nested[parts[0]!]!;
   else {
     const command = parts.slice(0, 2).join(" ");
-    if (partial.startsWith("--") || path.includes("--"))
+    if (partial.startsWith("--"))
+      candidates = flags[command] ??
+        flags[parts[0]!] ?? ["--json", "--dry-run", "--yes"];
+    else if (command === "stake create" && parts.at(-1) === "--validator")
+      candidates = cache.recentValidators;
+    else if (path.includes("--"))
       candidates = flags[command] ??
         flags[parts[0]!] ?? ["--json", "--dry-run", "--yes"];
     else if (
@@ -88,8 +93,6 @@ export function completeLine(
       candidates = cache.tokenMints;
     else if (command === "stake deactivate" || command === "stake withdraw")
       candidates = cache.stakeAccounts;
-    else if (command === "stake create" && parts.includes("--validator"))
-      candidates = cache.recentValidators;
   }
   const hits = candidates.filter((candidate) => candidate.startsWith(partial));
   return [hits, partial];

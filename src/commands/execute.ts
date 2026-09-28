@@ -1,4 +1,4 @@
-import { address } from "@solana/kit";
+import { address, assertIsSignature, type Signature } from "@solana/kit";
 import { setSessionCluster } from "../config/config.js";
 import { AppError } from "../errors/errors.js";
 import { formatSol } from "../solana/amounts.js";
@@ -11,7 +11,6 @@ import {
   type ParsedCommand,
 } from "../shell/parser.js";
 import { helpText } from "../shell/help.js";
-import { readHistory } from "../shell/history.js";
 import { Output } from "../output/output.js";
 import { transactionExplorerUrl } from "../output/transaction.js";
 import { importWallet } from "./wallet-import.js";
@@ -55,6 +54,20 @@ import {
  */
 export interface ExecutionResult {
   exit: boolean;
+}
+
+/** Validate a transaction identifier before asking the configured RPC. */
+export function parseTransactionSignature(value: string): Signature {
+  try {
+    assertIsSignature(value);
+    return value;
+  } catch {
+    throw new AppError(
+      "Invalid Solana transaction signature; expected a base58-encoded 64-byte signature.",
+      "InvalidSignatureError",
+      2,
+    );
+  }
 }
 
 const TOP_LEVEL = [
@@ -408,6 +421,8 @@ async function executeSet(
       throw new AppError("RPC URL must use http or https.", "ConfigError", 2);
     }
     context.config.rpcUrl = value;
+    // The user explicitly accepts displaying and retaining the supplied RPC
+    // URL for this session; status and show-config use separate redaction.
     context.completion.tokenMints = [];
     context.completion.stakeAccounts = [];
     context.completion.recentValidators = [];
@@ -442,10 +457,11 @@ async function executeTx(
   rejectExtraArgs(command, 2, "tx inspect <signature>");
   if (command.args[0] !== "inspect")
     throw unknownCommand(`tx ${command.args[0]}`);
+  const signature = parseTransactionSignature(command.args[1]!);
   const rpc = context.getClient().rpc;
   await assertRpcCluster(rpc, context.config.cluster);
   const response = await rpcRequest(
-    rpc.getTransaction(command.args[1]! as never, {
+    rpc.getTransaction(signature, {
       commitment: context.config.commitment,
       encoding: "json",
       maxSupportedTransactionVersion: 0,
@@ -453,12 +469,8 @@ async function executeTx(
     "transaction lookup",
   );
   context.output.print(
-    { ok: true, signature: command.args[1], transaction: response },
-    formatTransactionSummary(
-      command.args[1]!,
-      response,
-      context.config.cluster,
-    ),
+    { ok: true, signature, transaction: response },
+    formatTransactionSummary(signature, response, context.config.cluster),
   );
   return { exit: false };
 }

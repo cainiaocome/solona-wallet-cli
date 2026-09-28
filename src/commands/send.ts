@@ -184,18 +184,26 @@ export async function confirmSignature(
   confirmationStatus: "processed" | "confirmed" | "finalized";
 }> {
   let showedProgress = false;
+  // Finality normally trails confirmation by only a few slots, but can take
+  // longer with a lagging or rate-limited RPC. Give finalized transactions a
+  // wider window so the CLI does not prematurely report an unknown outcome.
+  const maxAttempts = commitment === "finalized" ? 120 : 60;
   try {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (showProgress && attempt === 0) {
         process.stderr.write("Waiting for transaction confirmation");
         showedProgress = true;
       } else if (showProgress && attempt > 0 && attempt % 4 === 0) {
         process.stderr.write(".");
       }
+      const statusRequest =
+        attempt === maxAttempts - 1
+          ? rpc.getSignatureStatuses([signature as never], {
+              searchTransactionHistory: true,
+            })
+          : rpc.getSignatureStatuses([signature as never]);
       const response = await rpcRequest(
-        rpc.getSignatureStatuses([signature as never], {
-          searchTransactionHistory: true,
-        }),
+        statusRequest,
         "transaction confirmation lookup",
       );
       const status = response.value[0];

@@ -1,8 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { address } from "@solana/kit";
+import {
+  address,
+  appendTransactionMessageInstruction,
+  createKeyPairSignerFromBytes,
+  createTransactionMessage,
+  setTransactionMessageFeePayer,
+  setTransactionMessageLifetimeUsingBlockhash,
+  signTransactionMessageWithSigners,
+} from "@solana/kit";
+import { getTransferSolInstruction } from "@solana-program/system";
 import {
   getDeactivateInstruction,
   getDelegateStakeInstruction,
@@ -17,12 +26,15 @@ import {
 import {
   insertReadonlyAccounts,
   STAKE_ACCOUNT_SPACE,
+  getStakeAccountInfo,
   STAKE_STAKER_AUTHORITY_OFFSET,
   STAKE_WITHDRAW_AUTHORITY_OFFSET,
   STAKE_CONFIG_ADDRESS,
   addStakeRegistryEntry,
   readStakeAccounts,
   readStakeRegistry,
+  submitStakeCreation,
+  withStakeAccountRecovery,
 } from "../../src/commands/staking.js";
 import { createCommandContext } from "../../src/commands/context.js";
 import {
@@ -30,6 +42,8 @@ import {
   setSessionCluster,
 } from "../../src/config/config.js";
 import { clusterSchema, defaultRpcUrl } from "../../src/config/schema.js";
+import { ConfirmationError } from "../../src/errors/errors.js";
+import { normalizeSecretKey } from "../../src/wallet/keystore.js";
 
 const wallet = address("11111111111111111111111111111112");
 const vote = address("11111111111111111111111111111113");
@@ -60,6 +74,119 @@ function stakeContext(
 }
 
 describe("native stake instruction safety", () => {
+  it("uses base64 when checking whether an existing stake account is present", async () => {
+    const stakeAddress = "11111111111111111111111111111114";
+    const getAccountInfo = vi.fn((_address: unknown, _config: unknown) =>
+      request({ value: null }),
+    );
+
+    await getStakeAccountInfo(
+      { getAccountInfo } as never,
+      stakeAddress,
+      "confirmed",
+      "unit test stake lookup",
+    );
+
+    expect(getAccountInfo).toHaveBeenCalledWith(address(stakeAddress), {
+      commitment: "confirmed",
+      encoding: "base64",
+    });
+  });
+
+  it("preserves stake-address recovery details on an uncertain create result", () => {
+    const cause = new ConfirmationError("Query signature before retrying.", {
+      signature: "offline-test-signature",
+      broadcastOutcomeUnknown: true,
+    });
+
+    const result = withStakeAccountRecovery(
+      cause,
+      "11111111111111111111111111111114",
+      true,
+    );
+
+    expect(result.message).toContain(
+      "Stake account: 11111111111111111111111111111114",
+    );
+    expect(result.details).toMatchObject({
+      signature: "offline-test-signature",
+      broadcastOutcomeUnknown: true,
+      stakeAccount: "11111111111111111111111111111114",
+      localRecoveryHintSaved: true,
+    });
+  });
+
+  it("persists the stake recovery hint before an ambiguous broadcast", async () => {
+    const configDir = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-stake-create-unknown-"),
+    );
+    const context = stakeContext(
+      configDir,
+      "d8ed414d-2175-4ab6-a0c9-4388514f5952",
+      "daily",
+      wallet,
+      "devnet",
+    );
+    const secret = await normalizeSecretKey(new Uint8Array(32).fill(31));
+    const payer = await createKeyPairSignerFromBytes(secret);
+    secret.fill(0);
+    let message = createTransactionMessage({ version: 0 });
+    message = setTransactionMessageFeePayer(payer.address, message);
+    message = setTransactionMessageLifetimeUsingBlockhash(
+      {
+        blockhash: "11111111111111111111111111111111" as never,
+        lastValidBlockHeight: 100n,
+      },
+      message,
+    );
+    message = appendTransactionMessageInstruction(
+      getTransferSolInstruction({
+        source: payer,
+        destination: address("11111111111111111111111111111113"),
+        amount: 1n,
+      }),
+      message,
+    );
+    const signed = await signTransactionMessageWithSigners(message);
+    const stakeAddress = "11111111111111111111111111111114";
+    let hintWasSavedAtBroadcast = false;
+    const rpc = {
+      sendTransaction: () => ({
+        send: async () => {
+          hintWasSavedAtBroadcast = (
+            await readStakeRegistry(context)
+          ).accounts.some((entry) => entry.address === stakeAddress);
+          throw new Error("connection closed after request body was sent");
+        },
+      }),
+    } as never;
+
+    try {
+      const error = await submitStakeCreation(
+        context,
+        rpc,
+        signed,
+        stakeAddress,
+        String(vote),
+        100n,
+      ).catch((failure: unknown) => failure);
+
+      expect(hintWasSavedAtBroadcast).toBe(true);
+      expect(error).toBeInstanceOf(ConfirmationError);
+      expect((error as Error).message).toContain(stakeAddress);
+      expect((error as ConfirmationError).details).toMatchObject({
+        stakeAccount: stakeAddress,
+        localRecoveryHintSaved: true,
+        broadcastOutcomeUnknown: true,
+      });
+      expect((await readStakeRegistry(context)).accounts).toMatchObject([
+        { address: stakeAddress, validatorVoteAccount: String(vote) },
+      ]);
+    } finally {
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps the documented StakeStateV2 filter offsets", () => {
     expect(STAKE_ACCOUNT_SPACE).toBe(200n);
     expect(STAKE_STAKER_AUTHORITY_OFFSET).toBe(12n);

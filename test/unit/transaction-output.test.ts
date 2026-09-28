@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import bs58 from "bs58";
 import { createCommandContext } from "../../src/commands/context.js";
 import { executeLine } from "../../src/commands/execute.js";
 import {
@@ -10,7 +11,7 @@ import {
 } from "../../src/output/transaction.js";
 
 const MAINNET_GENESIS = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
-const SIGNATURE = "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d";
+const SIGNATURE = bs58.encode(new Uint8Array(64).fill(7));
 
 describe("human transaction output", () => {
   afterEach(() => vi.restoreAllMocks());

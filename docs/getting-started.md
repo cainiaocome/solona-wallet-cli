@@ -46,6 +46,23 @@ Every wrapper invocation pulls the selected image first. If Docker cannot
 reach the registry or the pull fails, the wrapper stops instead of using a
 possibly outdated local copy.
 
+The wrapper runs inside Docker, so it does not automatically inherit your host
+shell's environment or read a host `.env` file. To select Devnet, export the
+supported settings in the host shell before running it:
+
+```bash
+export SOL_WALLET_CLUSTER=devnet
+export SOL_WALLET_RPC_URL=https://api.devnet.solana.com
+export SOL_WALLET_COMMITMENT=confirmed
+scripts/sol-wallet
+```
+
+The wrapper forwards these three network settings. `SOL_WALLET_CONFIG_DIR` is
+different: it selects the host directory mounted for encrypted wallet files
+and is not passed into the container as a setting. When running from source,
+the CLI can read `.env` from its current working directory; the release wrapper
+does not mount or load that file.
+
 The container runs as an unprivileged user. Mapping your host UID/GID lets the
 container write the `0700` configuration directory without making that
 directory world-readable.

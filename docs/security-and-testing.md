@@ -23,13 +23,19 @@ this document before putting any value on an address controlled by it.
   under a UUID with create-only hard-link semantics and mode `0600`. Existing
   keystores are not overwritten; registry changes are locked and atomic.
 - A signer is created only after validation, simulation, and confirmation.
-- Secrets are filtered from shell history and redacted from verbose error
-  details where practical. History also rejects likely raw base58, hex, and
-  JSON byte-array key encodings.
+- Secret-bearing command words, validated 64-byte keypairs, raw hex, and
+  JSON-byte-array key material are filtered from shell history. Public
+  addresses, mints, and transaction signatures in recognized command positions
+  can be recalled. A 32-byte base58 value is ambiguous by format alone, so do
+  not paste a raw seed into a command argument. Verbose error details are
+  redacted where practical.
 - Before creating a transaction, writes compare the RPC endpoint's genesis
   hash to the selected mainnet or devnet cluster.
 - Stake withdrawal checks the calculated on-chain activation state and any configured
   time/epoch lockup before building the instruction.
+- Solana token accounts (165 bytes) and stake accounts (200 bytes) are read
+  using an explicit base64 encoding. Kit's omitted-encoding account overload
+  requests base58, which Solana RPC rejects for account data over 128 bytes.
 - The runtime image runs as a non-root `solwallet` user.
 
 ## What the wallet cannot protect
@@ -44,6 +50,11 @@ this document before putting any value on an address controlled by it.
   transaction. Address syntax validation is not identity verification.
 - Simulation cannot guarantee future success because chain state can change.
 - A confirmation timeout does not prove that a transaction failed.
+- An RPC URL can contain provider credentials. As previously accepted for this
+  project, `set rpc-url` displays the supplied URL and the typed command may be
+  retained in local interactive history, while `status` and `show config`
+  sanitize the displayed endpoint. Avoid credential-bearing URLs in commands
+  that may enter history, or clear history after use.
 - Stake activation is calculated client-side from the stake account, current
   epoch, and StakeHistory sysvar using Anza's maintained implementation. It
   uses standard account/epoch RPC methods instead of the removed
@@ -93,7 +104,10 @@ instruction layout and wallet/network registry isolation, signer binding, JSON
 line framing and errors, wallet recovery and writer contention, and other
 deterministic boundaries. Jupiter command tests use deterministic adapter
 instructions and verify that the selected wallet signs deposit and withdrawal
-transactions.
+transactions. Token-send Docker E2E covers both missing and existing
+associated token accounts. Its mock RPC rejects a data query without base64
+when the fixture is 165 bytes, reproducing the real JSON-RPC account-size
+constraint deterministically.
 
 The source test command does not prove that a Docker image works. The image
 has a separate build and E2E path.
@@ -125,7 +139,8 @@ npm ci
 The E2E harness checks the behavior a source test cannot see: non-root file
 permissions, interactive prompts, wallet import, hidden input, completion,
 JSON output, the runtime image's production dependencies, and the mock RPC
-transaction path. It decodes the submitted SOL, token, and stake transactions,
+transaction path, including the existing-token-account transfer branch. It
+decodes the submitted SOL, token, and stake transactions,
 checks wallet B is the fee payer, and verifies each Ed25519 signature against
 B's public key. Publication happens only after all gates pass. Pull requests
 run the gates but do not publish; pushes to the main branch and version tags

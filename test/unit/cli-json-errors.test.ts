@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { stringifyJson } from "../../src/output/json.js";
+import { parseTransactionSignature } from "../../src/commands/execute.js";
+import bs58 from "bs58";
 
 describe("line-oriented JSON and command errors", () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -50,4 +52,14 @@ describe("line-oriented JSON and command errors", () => {
       }
     },
   );
+});
+
+describe("transaction signature validation", () => {
+  it("accepts a 64-byte base58 signature and rejects malformed input locally", () => {
+    const signature = bs58.encode(new Uint8Array(64).fill(7));
+    expect(parseTransactionSignature(signature)).toBe(signature);
+    expect(() => parseTransactionSignature("not-a-signature")).toThrow(
+      "Invalid Solana transaction signature",
+    );
+  });
 });

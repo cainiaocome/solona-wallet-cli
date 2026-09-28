@@ -88,6 +88,15 @@ confirmation (only in an interactive human terminal). A successful receipt
 shows the wallet, network, confirmation level, slot, action details, full
 signature, and a Solana Explorer link. If confirmation times out, the
 transaction may still have landed: inspect the signature before retrying.
+For `finalized`, the CLI allows up to about 60 seconds for the commitment to
+arrive; `processed` and `confirmed` use a shorter window. This is a polling
+limit, not a promise that an RPC will respond promptly. A timeout remains an
+unknown outcome, so check the signature before submitting a replacement.
+
+If `stake create` has an uncertain broadcast or confirmation result, the error
+also prints the locally derived stake-account address. The CLI stores that
+public recovery hint before broadcast when local storage is available, allowing
+a later `stake list` to reconcile it with the chain.
 
 `--dry-run` prints that the transaction was simulated and not broadcast.
 `--yes` skips only the confirmation question; it does not skip validation,
@@ -98,7 +107,9 @@ simulation, or the passphrase prompt required to sign.
 Run `sol-wallet --help` (or `-h`) for startup flags. In the shell, `help` shows
 commands and `help <topic>` shows a command group. Tab completion uses the
 commands, flags, wallet aliases, token mints, validators, and stake accounts
-already known to the current shell; it does not make background RPC calls.
+already known to the current shell; it does not make background RPC calls. To
+complete the value after `stake create ... --validator`, first run `validators`
+so the current shell can cache vote-account addresses.
 
 For scripts, use `-c "<command>" --json`. JSON is one compact document on
 stdout; errors are JSON on stderr and return a non-zero exit status. In JSON
@@ -109,6 +120,23 @@ to preserve exact values. `status` adds a `health` field (`healthy`,
 separate `positions`, and an `updatedAt` timestamp; a missing wallet has
 `balances: null` and `positions: null`. On devnet, the Jupiter position is
 reported as not supported rather than queried.
+
+`wallet import --json` remains interactive because importing requires address
+verification, passphrase entry, and confirmation. The derived public address
+is written to stderr before the prompt; only the final machine-readable result
+is written to stdout. `tx inspect` accepts only a base58-encoded 64-byte
+transaction signature and rejects malformed values before making an RPC call.
+
+Interactive history is stored locally with restrictive file permissions.
+Recognized commands retain public address, mint, and transaction-signature
+arguments so they can be recalled; likely private-key encodings and commands
+containing secret-bearing words are excluded. A 32-byte base58 string is
+ambiguous by format alone, so never paste a raw seed/private key into a command
+argument; enter wallet key material only at the hidden import prompt or through
+the documented keypair-file flow. As previously accepted, an RPC URL supplied
+to `set rpc-url` is echoed and the typed command may be retained in history;
+avoid credentials in the URL when using interactive history, or clear history
+with `clear`/`cls`.
 
 Use `--verbose` as a startup option when you need technical raw amounts in
 human output, for example `sol-wallet --verbose -c "balance"`.

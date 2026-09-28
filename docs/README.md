@@ -30,8 +30,10 @@ The more focused reference documents are also useful:
   decisions, dependency-install incident, release workflow, and known limits.
 - [Jupiter Lend Earn](jupiter-lend.md) documents the deliberately narrow v0.2
   mainnet USDC integration.
-- [Project review (2026-09-27)](review-2026-09-27.md) records outstanding findings,
-  reproduction evidence, and regression-test guidance.
+- [Project review (2026-09-27)](review-2026-09-27.md) preserves the original
+  review, reproduction evidence, and regression-test guidance.
+- [Review remediation (2026-09-27)](review-remediation-2026-09-27.md) records
+  the later full-baseline findings, fixes, regressions, and actual CI results.
 - [Original specification](../specs/spec.md#part-i-original-product-specification) records the initial product
   requirements and is preserved as a historical reference.
 - [Multiple-wallet product design](../specs/spec.md#part-ii-multiple-wallet-product-design) records

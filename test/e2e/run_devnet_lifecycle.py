@@ -196,7 +196,7 @@ def run():
                     "getAccountInfo",
                     [
                         lifecycle_state["stakeAccount"],
-                        {"commitment": "confirmed"},
+                        {"commitment": "confirmed", "encoding": "base64"},
                     ],
                 )["value"]
                 e2e.require(

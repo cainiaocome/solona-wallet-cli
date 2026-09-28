@@ -19,6 +19,14 @@ fi
 # 10001 for direct use; the wrapper uses the caller's UID/GID for 0700 mounts.
 USER_ARGS=(--user "$(id -u):$(id -g)")
 
+# Pass only the supported network settings into the container.
+ENV_ARGS=()
+for name in SOL_WALLET_CLUSTER SOL_WALLET_RPC_URL SOL_WALLET_COMMITMENT; do
+  if [[ -v $name ]]; then
+    ENV_ARGS+=(--env "$name")
+  fi
+done
+
 # Always refresh the configured tag before launching so a cached image never
 # silently hides a newer published release. With `set -e`, pull failures stop
 # here instead of falling back to stale local content.
@@ -27,6 +35,7 @@ docker pull "$IMAGE" >&2
 exec docker run --rm \
   "${TTY_ARGS[@]}" \
   "${USER_ARGS[@]}" \
+  "${ENV_ARGS[@]}" \
   -v "$CONFIG_DIR:/home/solwallet/.config/sol-wallet" \
   "$IMAGE" \
   "$@"

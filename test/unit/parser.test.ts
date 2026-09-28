@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import bs58 from "bs58";
 import { completeLine } from "../../src/shell/completion.js";
 import {
   appendHistory,
@@ -10,6 +11,7 @@ import {
 } from "../../src/shell/history.js";
 import { parseCommand, tokenize } from "../../src/shell/parser.js";
 import { helpText } from "../../src/shell/help.js";
+import { normalizeSecretKey } from "../../src/wallet/keystore.js";
 
 describe("wallet shell parser and completion", () => {
   it("supports quotes, escaped whitespace, and flag=value", () => {
@@ -80,6 +82,30 @@ describe("wallet shell parser and completion", () => {
     expect(completeLine("token list --acc", cache)[0]).toEqual(["--accounts"]);
   });
 
+  it("completes cached validators after --validator and retains flag completion", () => {
+    const cache = {
+      tokenMints: [],
+      stakeAccounts: [],
+      recentValidators: ["Vote111", "Vote222"],
+      walletAliases: [],
+    };
+    expect(completeLine("stake create 1 --validator ", cache)[0]).toEqual(
+      cache.recentValidators,
+    );
+    expect(completeLine("stake create 1 --validator Vote1", cache)[0]).toEqual([
+      "Vote111",
+    ]);
+    expect(completeLine("stake create 1 --val", cache)[0]).toContain(
+      "--validator",
+    );
+    expect(completeLine("stake create 1 --validator --", cache)[0]).toContain(
+      "--dry-run",
+    );
+    expect(
+      completeLine("stake create 1 --validator Vote111 ", cache)[0],
+    ).toEqual(["--validator", "--dry-run", "--yes", "--json"]);
+  });
+
   it("keeps general and topic help aligned with the wallet and status commands", () => {
     expect(helpText()).toContain("wallet recover <uuid> <alias>");
     expect(helpText("wallet")).toContain("wallet migrate <alias>");
@@ -90,7 +116,45 @@ describe("wallet shell parser and completion", () => {
   it("filters secret-looking lines from history", () => {
     expect(isSafeHistoryLine("balance")).toBe(true);
     expect(isSafeHistoryLine("wallet import --password nope")).toBe(false);
+    expect(
+      isSafeHistoryLine(
+        "set rpc-url https://user:api-token@rpc.example/abc123",
+      ),
+    ).toBe(true);
     expect(isSafeHistoryLine("")).toBe(false);
+  });
+
+  it("recalls public addresses and signatures in known command arguments", () => {
+    const address = bs58.encode(Buffer.alloc(32, 11));
+    const signature = bs58.encode(Buffer.alloc(64, 17));
+    expect(isSafeHistoryLine(`send ${address} 1`)).toBe(true);
+    expect(isSafeHistoryLine(`token balance ${address}`)).toBe(true);
+    expect(isSafeHistoryLine(`token send ${address} ${address} 1`)).toBe(true);
+    expect(isSafeHistoryLine(`stake create 1 --validator ${address}`)).toBe(
+      true,
+    );
+    expect(isSafeHistoryLine(`stake create 1 --validator=${address}`)).toBe(
+      true,
+    );
+    expect(isSafeHistoryLine(`stake deactivate ${address}`)).toBe(true);
+    expect(isSafeHistoryLine(`stake withdraw ${address}`)).toBe(true);
+    expect(isSafeHistoryLine(`tx inspect ${signature} --json`)).toBe(true);
+    expect(isSafeHistoryLine(address)).toBe(false);
+    expect(isSafeHistoryLine(`unknown ${address}`)).toBe(false);
+  });
+
+  it("continues to exclude actual pasted keypairs from history", async () => {
+    const privateKey = await normalizeSecretKey(new Uint8Array(32).fill(23));
+    try {
+      const encoded = bs58.encode(privateKey);
+      expect(isSafeHistoryLine(encoded)).toBe(false);
+      expect(isSafeHistoryLine(`tx inspect ${encoded}`)).toBe(false);
+      expect(isSafeHistoryLine(`stake create 1 --validator=${encoded}`)).toBe(
+        false,
+      );
+    } finally {
+      privateKey.fill(0);
+    }
   });
 
   it("caps persisted history at the newest 1,000 safe entries", async () => {

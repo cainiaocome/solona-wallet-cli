@@ -7,6 +7,7 @@ import {
   createAddressWithSeed,
   createTransactionMessage,
   getBase64EncodedWireTransaction,
+  getSignatureFromTransaction,
   setTransactionMessageFeePayer,
   setTransactionMessageLifetimeUsingBlockhash,
   signTransactionMessageWithSigners,
@@ -36,6 +37,7 @@ import {
 import path from "node:path";
 import { scopedStakeRegistryPath } from "../config/config.js";
 import {
+  ConfirmationError,
   InsufficientBalanceError,
   SimulationError,
   StakeAccountError,
@@ -117,6 +119,87 @@ export interface StakeRegistry {
   walletAddress: string;
   cluster: "mainnet" | "devnet";
   accounts: StakeRegistryEntry[];
+}
+
+/** Attach the locally known stake address to an uncertain create outcome. */
+export function withStakeAccountRecovery(
+  error: ConfirmationError,
+  stakeAccount: string,
+  localRecoveryHintSaved: boolean,
+): ConfirmationError {
+  const inheritedDetails =
+    error.details &&
+    typeof error.details === "object" &&
+    !Array.isArray(error.details)
+      ? error.details
+      : {};
+  return new ConfirmationError(
+    `${error.message}\nStake account: ${stakeAccount}${localRecoveryHintSaved ? "" : "\nWarning: the local stake recovery hint could not be saved."}`,
+    {
+      ...inheritedDetails,
+      stakeAccount,
+      localRecoveryHintSaved,
+    },
+  );
+}
+
+/** Query stake-account existence using base64, supported for its 200-byte data. */
+export async function getStakeAccountInfo(
+  rpc: ReturnType<CommandContext["getClient"]>["rpc"],
+  stakeAccount: string,
+  commitment: "processed" | "confirmed" | "finalized",
+  label: string,
+) {
+  return rpcRequest(
+    rpc.getAccountInfo(parseAddress(stakeAccount), {
+      commitment,
+      encoding: "base64",
+    }),
+    label,
+  );
+}
+
+/** Save stake recovery metadata before sending, then report ambiguous outcomes. */
+export async function submitStakeCreation(
+  context: CommandContext,
+  rpc: ReturnType<CommandContext["getClient"]>["rpc"],
+  signed: Parameters<typeof getBase64EncodedWireTransaction>[0],
+  stakeAccount: string,
+  validatorVoteAccount: string,
+  lastValidBlockHeight: bigint,
+  showProgress = false,
+): Promise<{
+  signature: string;
+  status: Awaited<ReturnType<typeof confirmSignature>>;
+  registrySaved: boolean;
+}> {
+  const signature = String(getSignatureFromTransaction(signed));
+  let registrySaved = true;
+  try {
+    await addStakeRegistryEntry(context, {
+      address: stakeAccount,
+      validatorVoteAccount,
+      createdSignature: signature,
+      createdAt: new Date().toISOString(),
+    });
+  } catch {
+    registrySaved = false;
+  }
+
+  try {
+    await broadcastSignedTransaction(rpc, signed, context.config.commitment);
+    const status = await confirmSignature(
+      rpc,
+      signature,
+      context.config.commitment,
+      lastValidBlockHeight,
+      showProgress,
+    );
+    return { signature, status, registrySaved };
+  } catch (error) {
+    if (!(error instanceof ConfirmationError)) throw error;
+    throw withStakeAccountRecovery(error, stakeAccount, registrySaved);
+  }
 }
 
 export async function stakeCreate(
@@ -295,29 +378,15 @@ export async function stakeCreate(
     ),
   );
   const signed = await signTransactionMessageWithSigners(message);
-  const signature = await broadcastSignedTransaction(
+  const { signature, status, registrySaved } = await submitStakeCreation(
+    context,
     rpc,
     signed,
-    context.config.commitment,
-  );
-  const status = await confirmSignature(
-    rpc,
-    String(signature),
-    context.config.commitment,
+    stakeAccount,
+    validator.voteAccount,
     latest.value.lastValidBlockHeight,
     !context.output.json && Boolean(process.stderr.isTTY),
   );
-  let registrySaved = true;
-  try {
-    await addStakeRegistryEntry(context, {
-      address: stakeAccount,
-      validatorVoteAccount: validator.voteAccount,
-      createdSignature: String(signature),
-      createdAt: new Date().toISOString(),
-    });
-  } catch {
-    registrySaved = false;
-  }
   context.output.print(
     {
       ok: true,
@@ -439,10 +508,10 @@ export async function readStakeAccounts(
   const closedAddresses: string[] = [];
   for (const entry of missingEntries) {
     try {
-      const response = await rpcRequest(
-        rpc.getAccountInfo(parseAddress(entry.address), {
-          commitment: context.config.commitment,
-        }),
+      const response = await getStakeAccountInfo(
+        rpc,
+        entry.address,
+        context.config.commitment,
         "local stake account lookup",
       );
       if (response.value === null) {
@@ -574,7 +643,6 @@ async function runStakeInstruction(
 ): Promise<void> {
   const owner = await requireWallet(context);
   const rpc = context.getClient().rpc;
-  await assertRpcCluster(rpc, context.config.cluster);
   const latest = await rpcRequest(
     rpc.getLatestBlockhash({ commitment: context.config.commitment }),
     "recent blockhash lookup",
@@ -658,10 +726,10 @@ async function runStakeInstruction(
     typeof summary.stakeAccount === "string"
   ) {
     try {
-      const account = await rpcRequest(
-        rpc.getAccountInfo(parseAddress(summary.stakeAccount), {
-          commitment: context.config.commitment,
-        }),
+      const account = await getStakeAccountInfo(
+        rpc,
+        summary.stakeAccount,
+        context.config.commitment,
         "closed stake account verification",
       );
       if (account.value === null) {
