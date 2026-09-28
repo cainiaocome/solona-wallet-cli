@@ -1,4 +1,4 @@
-# Stake validator vote-account display fix — implementation complete, CI pending
+# Stake validator vote-account display fix — complete
 
 ## Goal
 
@@ -24,9 +24,15 @@ Program RPC data in `stake list` and stake deactivation previews.
   compilation, and `git diff --check` passed.
 - Linux/amd64 Docker image build succeeded; all 21 Docker/Python E2E tests
   passed against that image.
+- GitHub Actions run
+  [36400977108](https://github.com/cainiaocome/solona-wallet-cli/actions/runs/36400977108)
+  passed dependency policy, formatting, all 87 unit tests, TypeScript build,
+  Linux/amd64 image build, all image E2E tests, and publication of the tested
+  image.
 - The credentialed live Devnet lifecycle was not run; no live-chain transaction
   was submitted.
 
 ## Remaining
 
-- Commit and push the changes, then verify GitHub Actions for the pushed commit.
+No implementation work remains. Run the scheduled/manual Devnet lifecycle when
+the dedicated disposable-wallet credential is available.
