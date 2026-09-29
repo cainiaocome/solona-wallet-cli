@@ -25,6 +25,8 @@ read the documents in this order:
    policy, CI, Docker build, and dependency updates work together.
 9. [Devnet E2E guide](devnet-e2e-plan.md) — real-chain command coverage,
    Devnet setup/safety, workflow operation, and resumable native-stake tests.
+10. [External agent skills](agent-skills.md) — how the pinned Jupiter skills
+    are exposed to coding agents and how to safely update the submodule.
 
 The more focused reference documents are also useful:
 

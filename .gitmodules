@@ -1,0 +1,3 @@
+[submodule "submodules/jup-ag-agent-skills"]
+	path = submodules/jup-ag-agent-skills
+	url = https://github.com/jup-ag/agent-skills.git
