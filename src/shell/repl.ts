@@ -130,10 +130,11 @@ function createInterface(
     output: process.stdout,
     terminal: Boolean(process.stdin.isTTY && process.stdout.isTTY),
     historySize: 1000,
+    // Persisted history is chronological; readline recalls newest entries first.
+    history: [...history].reverse(),
     completer: (line, callback) =>
       callback(null, completeLine(line, context.completion)),
   }) as readline.Interface & { history: string[] };
-  rl.history = history;
   rl.on("SIGINT", () => {
     if (rl.line.length) {
       const editable = rl as readline.Interface & {

@@ -166,6 +166,9 @@ is written to stdout. `tx inspect` accepts only a base58-encoded 64-byte
 transaction signature and rejects malformed values before making an RPC call.
 
 Interactive history is stored locally with restrictive file permissions.
+Up recalls the most recent saved command first; additional presses move backward
+through commands, and Down moves toward newer commands. This ordering also applies
+after restarting the shell. Secret-looking input remains excluded.
 Recognized commands retain public address, mint, and transaction-signature
 arguments so they can be recalled; likely private-key encodings and commands
 containing secret-bearing words are excluded. A 32-byte base58 string is
