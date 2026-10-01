@@ -56,9 +56,77 @@ The pinned non-prerelease SDK exposes the basic Earn deposit/withdraw/redeem bui
 - supplied position in underlying USDC
 - protocol-reported currently withdrawable USDC
 - receipt-token mint/account and shares
-- supply and rewards rates as raw protocol values, without inventing a percentage scale
+- when rate data is valid, base APR, rewards APR, total APR, estimated APY, and the timestamp for the rate snapshot
 
 The adapter reports both the protocol's current liquidity limit and the user's supplied assets. `currentlyWithdrawable` is the smaller of those values and is authoritative for `jupiter-lend withdraw <amount>` validation and for `jupiter-lend withdraw --all`. The command never guesses a maximum from a receipt-token balance.
+
+## APR, APY, and deposit estimate
+
+APR is a yearly rate before compounding. The base APR is the current supply
+rate, and the rewards APR is the current rewards rate; total APR is their sum.
+APY expresses an estimated yearly return after compounding. For a beginner's
+rule of thumb, APR is the stated rate before reinvesting returns, while APY
+shows what repeated reinvestment could produce under its stated assumptions.
+
+The estimate uses 365 daily compounding periods and assumes the current total
+APR stays unchanged for the full year. Treat the APR as a fraction in the
+formula (for example, 5.20% is 0.052):
+
+```text
+estimated APY = (1 + total APR / 365)^365 - 1
+estimated annual yield = proposed deposit × estimated APY
+```
+
+For example, if base APR is 4.20% and rewards APR is 1.00%, total APR is 5.20%
+and estimated APY is about 5.34%. On a proposed 1,000 USDC deposit, the
+estimated annual yield is about 53.37 USDC. This is an illustrative example,
+not a live quote. When rate data is valid, a deposit preview shows the same
+base, rewards, and total APR; estimated APY; and `Rates updated` timestamp as
+`jupiter-lend status`, plus the estimated annual yield for the proposed USDC
+amount. The estimate excludes fees and is not a calculation of interest or
+rewards already earned.
+
+Rates can change after they are read, so the APY and deposit yield are estimates
+based on the timestamped current rate snapshot, not a promise of future return.
+`Rates updated` is when this CLI read the rates for that snapshot; it is not a
+history of when the position earned interest or rewards.
+The calculation uses the existing on-chain read data and adds no REST request,
+API key, or dependency.
+
+The pinned `@jup-ag/lend-read@0.0.14` code treats the two input scales
+differently: `supplyRate` is in basis points (`420` means `4.20%`), while
+`rewardsRate` is a percent scaled by `10^12` (`10^12` means `1.00%`). The wallet
+normalizes each field separately with `bigint`, then derives APY with integer
+fixed-point arithmetic. The online [Jupiter Read Earn Data guide](https://developers.jup.ag/docs/lend/earn/read-data)
+and the [pinned SDK README](https://unpkg.com/@jup-ag/lend-read@0.0.14/README.md)
+describe rate precision only generally; use the `@jup-ag/lend-read@0.0.14`
+package implementation pinned by this repository as the authority for these
+exact field scales.
+
+If either rate is missing, malformed, or outside its supported range, rates,
+APY, and the deposit yield are reported as unavailable. The CLI does not
+substitute zero or calculate a partial total APR, and successfully read wallet
+balances and positions remain available.
+
+For scripts, `jupiter-lend status --json` adds a `yield` object; wallet
+`status --json` puts the same object at `positions.jupiterLend.yield`.
+The deposit preview and result use `preflight.yield` and
+`preflight.estimatedAnnualYield`. The fields `baseAprPercent`,
+`rewardsAprPercent`, `totalAprPercent`, and `estimatedApyPercent` are decimal
+strings expressed as percentages: `"5.2"` means 5.2%, not a fraction of 5.2.
+Exact APR values retain twelve fractional decimal places of precision; derived
+APY is rounded to that precision. Human percentages are rounded to four
+fractional places, with tiny positive values shown as `<0.0001%` rather than
+zero. The USDC projection uses the unrounded calculation and floors to six
+decimals; values below one USDC base unit say `<0.000001 USDC` in human output.
+
+An available snapshot includes `status: "available"`, `compounding: "daily"`,
+`daysPerYear: 365`, and `updatedAt`. An unavailable snapshot includes
+`status: "unavailable"`, a reason, and its refresh timestamp, without invented
+percentage fields. A genuine zero-rate snapshot remains available with zero
+percentages. Wallet status becomes `degraded` if its Jupiter rates are invalid,
+even when balances loaded successfully. The annual yield projection applies
+only to the proposed deposit and does not deduct transaction fees.
 
 ## Write behavior
 
@@ -89,4 +157,7 @@ JSON mode writes one success document to stdout. Integer amounts are decimal str
 
 The legacy Jupiter SDK dependency tree introduces `@solana/web3.js`, Anchor, and other packages that are not used by the v0.1 wallet core. `npm audit --omit=dev` currently reports transitive advisories through this upstream SDK line, including advisories associated with `toml`, `uuid`, and the web3/Anchor graph. No safe automated upgrade was applied because the SDK pins and API compatibility must be reviewed together. The Docker build removes the upstream SDK's unused `unbuild`, `vitest`, Vite, Rollup, esbuild, and tsx toolchain from the runtime image. This is recorded as a release blocker for a future dependency refresh, not hidden by weakening audit output.
 
-The current implementation has no live mainnet deposit or withdrawal test and does not claim one. Unit tests cover exact USDC amounts, canonical-mainnet gating, SDK-instruction conversion, user/protocol withdrawal bounds, signer binding, and completion. A future opt-in read-only integration test may exercise the current public position API. Any manual write smoke test must use a separately funded disposable wallet and a deliberately tiny amount after independent code review.
+Keep positive-path yield tests deterministic and test the Devnet rejection
+guard for this mainnet-only integration. Automated tests must never perform
+Mainnet test writes. Any manual write smoke test must use a separately funded
+disposable wallet and a deliberately tiny amount after independent code review.

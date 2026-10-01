@@ -348,6 +348,10 @@ class DockerOneShotTests(unittest.TestCase):
         self.assertEqual(payload["rpcUrl"], f"http://127.0.0.1:{self.port}")
 
     def test_lend_mainnet_guard_is_present_in_the_runtime_image(self):
-        result = self.run_wallet("jupiter-lend status")
-        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-        self.assertIn("mainnet", result.stderr)
+        for command in ("jupiter-lend status", "jupiter-lend deposit 1 --dry-run"):
+            with self.subTest(command=command):
+                methods_before = len(Handler.state.methods)
+                result = self.run_wallet(command)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn("mainnet", result.stderr)
+                self.assertEqual(len(Handler.state.methods), methods_before)

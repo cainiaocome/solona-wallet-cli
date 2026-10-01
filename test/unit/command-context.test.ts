@@ -235,8 +235,9 @@ describe("command-scoped wallet and output context", () => {
         receiptShares: 3_000_000n,
         receiptMint: "11111111111111111111111111111112",
         receiptTokenAccount: "11111111111111111111111111111113",
-        supplyRateRaw: 123n,
-        rewardsRateRaw: 456n,
+        supplyRateRaw: 420n,
+        rewardsRateRaw: 1_000_000_000_000n,
+        ratesUpdatedAt: "2026-10-01T12:00:00.000Z",
       };
       const config = {
         configDir: directory,
@@ -259,6 +260,12 @@ describe("command-scoped wallet and output context", () => {
       expect(summary).toMatch(/Wallet balance\s*:\s*2 USDC/);
       expect(summary).toMatch(/Withdrawable now\s*:\s*2.5 USDC/);
       expect(summary).not.toContain("Protocol supply rate (raw)");
+      expect(summary).toMatch(/Base APR\s*:\s*4.2%/);
+      expect(summary).toMatch(/Rewards APR\s*:\s*1%/);
+      expect(summary).toMatch(/Total APR\s*:\s*5.2%/);
+      expect(summary).toMatch(/Estimated APY\s*:\s*5.3372%/);
+      expect(summary).toContain("daily compounding and unchanged rates");
+      expect(summary).toContain("2026-10-01T12:00:00.000Z");
 
       output.length = 0;
       const verbose = createCommandContext(
@@ -267,11 +274,147 @@ describe("command-scoped wallet and output context", () => {
         { currentWalletId: wallet.id },
       );
       await executeLine(verbose, "jupiter-lend status");
-      expect(output.join("")).toMatch(/Protocol supply rate \(raw\)\s*:\s*123/);
+      expect(output.join("")).toMatch(/Protocol supply rate \(raw\)\s*:\s*420/);
+      output.length = 0;
+      await executeLine(regular, "jupiter-lend status --json");
+      expect(JSON.parse(output.join("")).yield).toMatchObject({
+        status: "available",
+        totalAprPercent: "5.2",
+        compounding: "daily",
+        daysPerYear: 365,
+      });
+      expect(output.join("")).not.toContain("\u001b[");
+
+      // Optional rate failures keep a valid supplied balance usable.
+      (mockedLend.position as Record<string, unknown>).rewardsRateRaw = null;
+      output.length = 0;
+      await executeLine(regular, "jupiter-lend status");
+      expect(output.join("")).toContain(
+        "Unavailable — missing or invalid rate data",
+      );
+      expect(output.join("")).toMatch(/Supplied\s*:\s*3 USDC/);
+      output.length = 0;
+      await executeLine(regular, "jupiter-lend status --json");
+      expect(JSON.parse(output.join(""))).toMatchObject({
+        suppliedUsdc: "3",
+        yield: { status: "unavailable" },
+      });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it.each([
+    ["available", 420n, 1_000_000_000_000n],
+    ["zero", 0n, 0n],
+    ["unavailable", 420n, null],
+  ])(
+    "shows %s yield in human and JSON deposit dry-runs without signing",
+    async (label, supplyRateRaw, rewardsRateRaw) => {
+      const directory = await mkdtemp(
+        path.join(os.tmpdir(), "sol-wallet-lend-yield-"),
+      );
+      const stdout: string[] = [];
+      const stderr: string[] = [];
+      try {
+        const wallet = await registerFixture(directory);
+        mockedLend.mode = "sign";
+        mockedLend.position = {
+          walletBalance: 2_000_000n,
+          supplied: 3_000_000n,
+          protocolWithdrawable: 3_000_000n,
+          withdrawable: 3_000_000n,
+          receiptShares: 3_000_000n,
+          receiptMint: "11111111111111111111111111111112",
+          receiptTokenAccount: "11111111111111111111111111111113",
+          supplyRateRaw,
+          rewardsRateRaw,
+          ratesUpdatedAt: "2026-10-01T12:00:00.000Z",
+        };
+        const context = createCommandContext(
+          {
+            configDir: directory,
+            cluster: "mainnet",
+            rpcUrl: "https://rpc.example.invalid",
+            commitment: "confirmed",
+          },
+          { json: false, verbose: false },
+          { currentWalletId: wallet.id },
+        );
+        const unlock = vi.fn(async () => {
+          throw new Error("dry-run must not unlock");
+        });
+        context.readPassphrase = unlock;
+        const broadcast = vi.fn();
+        context.getClient = () =>
+          ({
+            rpc: {
+              getAccountInfo: () =>
+                request({
+                  value: { owner: "11111111111111111111111111111111" },
+                }),
+              getLatestBlockhash: () =>
+                request({
+                  value: {
+                    blockhash: "11111111111111111111111111111111",
+                    lastValidBlockHeight: 200n,
+                  },
+                }),
+              getFeeForMessage: () => request({ value: 5_000n }),
+              getBalance: () => request({ value: 10_000_000_000n }),
+              simulateTransaction: () =>
+                request({ value: { err: null, logs: [] } }),
+              sendTransaction: broadcast,
+            },
+          }) as never;
+        vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+          stdout.push(String(chunk));
+          return true;
+        });
+        vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+          stderr.push(String(chunk));
+          return true;
+        });
+        await executeLine(context, "jupiter-lend deposit 1 --dry-run");
+        if (label === "unavailable") {
+          expect(stdout.join("")).toContain(
+            "Unavailable — missing or invalid rate data",
+          );
+        } else {
+          expect(stdout.join("")).toMatch(
+            label === "zero" ? /Total APR\s*:\s*0%/ : /Total APR\s*:\s*5.2%/,
+          );
+          expect(stdout.join("")).toMatch(
+            label === "zero"
+              ? /Estimated annual yield\s*:\s*~0 USDC/
+              : /Estimated annual yield\s*:\s*~0.053371 USDC/,
+          );
+          expect(stdout.join("")).toContain("excludes fees");
+        }
+        stdout.length = 0;
+        await executeLine(context, "jupiter-lend deposit 1 --dry-run --json");
+        expect(stdout).toHaveLength(1);
+        const result = JSON.parse(stdout[0]!);
+        expect(result.status).toBe("simulated");
+        expect(result.preflight.yield.status).toBe(
+          label === "unavailable" ? "unavailable" : "available",
+        );
+        if (label !== "unavailable") {
+          expect(result.preflight.estimatedAnnualYield.amountUsdc).toBe(
+            label === "zero" ? "0" : "0.053371",
+          );
+          expect(result.preflight.yield.compounding).toBe("daily");
+          expect(JSON.parse(stderr.at(-1)!).preflight.yield).toEqual(
+            result.preflight.yield,
+          );
+        }
+        expect(unlock).not.toHaveBeenCalled();
+        expect(broadcast).not.toHaveBeenCalled();
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("signs a deterministic Jupiter instruction with the selected wallet", async () => {
     const directory = await mkdtemp(

@@ -26,8 +26,9 @@ and `token list --accounts` for individual token-account addresses.
 The human-readable view is a dashboard: wallet/network identity first, liquid
 SOL and token balances next, then non-liquid positions. Jupiter Lend shows
 **In wallet**, **Supplied**, and **Withdrawable now** on separate labeled rows,
-with USDC repeated on every amount. This makes clear that supplied USDC is a
-position and not the same thing as liquid wallet balance.
+with USDC repeated on every amount, plus **Total APR** when rate data is valid.
+This makes clear that supplied USDC is a position and not the same thing as
+liquid wallet balance.
 
 The output includes the wallet, saved default, network, sanitized RPC endpoint,
 commitment, and refresh time. `MAINNET` is explicitly marked as real funds.
@@ -45,20 +46,33 @@ terminals instead of truncating long account addresses. See [Reading the
 terminal output](terminal-output.md) for color behavior, responsive tables,
 and examples.
 
-RPC health and each balance section are reported separately. For example,
-status can still show the wallet and network if an RPC read fails. Such a value
-is marked **unavailable**, never reported as zero. A `degraded` health result
-means the RPC was verified but at least one balance section could not be read;
-`unavailable` means the endpoint could not be verified for the selected
-network. `Updated` is the time this refresh completed, not a promise that the
-chain state has not changed since then.
+RPC health, balance sections, positions, and Jupiter rate data are reported
+separately. For example, status can still show the wallet and network if an RPC
+read fails. Such a value is marked **unavailable**, never reported as zero. A
+`degraded` health result means the RPC was verified but at least one data
+section or rate value could not be read or validated; balances that were read
+successfully remain visible. `unavailable` means the endpoint could not be
+verified for the selected network. `Updated` is the time this refresh
+completed, not a promise that the chain state has not changed since then.
 
 Status also summarizes native stake and, on mainnet, the selected wallet's
 Jupiter Lend USDC position. These appear in a separate **Positions** section and
 are never added to liquid SOL/token balances. On devnet, Jupiter Lend is marked
 mainnet-only instead of being queried. Use `stake list` and `jupiter-lend
 status` for full details; do not interpret staked or supplied assets as
-immediately liquid.
+immediately liquid. When rate data is valid, `jupiter-lend status` reports Base
+APR, Rewards APR, Total APR, Estimated APY, and the rate timestamp alongside
+position details. A deposit preview includes those same rate details and an
+estimated annual yield in USDC for the proposed deposit. Otherwise, the
+rate-derived fields and yield estimate are marked unavailable.
+
+APR is the yearly rate before compounding; APY estimates a year of daily
+compounding at the current total APR. Both the APY and the preview's annual
+yield assume that rate remains unchanged for 365 days. Rates can change, and
+the yield estimate excludes fees; it is not a record of past earnings. When a
+rate is missing or invalid, rate-derived values are unavailable rather than
+zero, while available balances remain visible. **Rates updated** shows when
+the CLI read the rates used for that estimate.
 
 ## Wallet identity and ordinary reads
 
@@ -140,8 +154,10 @@ does not corrupt the final JSON document on stdout. Integer amounts are strings
 to preserve exact values. `status` adds a `health` field (`healthy`,
 `degraded`, or `unavailable`), an `rpc` result, per-section `balances` and
 separate `positions`, and an `updatedAt` timestamp; a missing wallet has
-`balances: null` and `positions: null`. On devnet, the Jupiter position is
-reported as not supported rather than queried.
+`balances: null` and `positions: null`. On mainnet, the Jupiter section
+includes current Total APR; `jupiter-lend status` and deposit preflight include
+the detailed rate and estimate information described above. On devnet, the
+Jupiter position is reported as not supported rather than queried.
 
 `wallet import --json` remains interactive because importing requires address
 verification, passphrase entry, and confirmation. The derived public address

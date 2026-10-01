@@ -1,36 +1,42 @@
-# Add Jupiter agent skills submodule
+# Jupiter Lend yield display
 
 ## Goal
 
-Pin `jup-ag/agent-skills` beneath a reusable root `submodules/` directory and
-expose its `skills/` through `.agents/skills` so compatible coding agents can
-discover them. Document clone, update, review, and Docker-context behavior.
+Show current base/rewards/total APR and estimated APY in Jupiter status and
+deposit previews; include total APR in wallet status and a deposit annual yield
+estimate. Add tests, docs, commit/push and verify GitHub CI.
 
-## Milestones
+## Decisions
 
-- [x] Inspect repository state, project guidance, existing submodule/agent paths,
-      and upstream skill layout. Worktree was clean at `a0a97d7`.
-- [x] Add the upstream Git submodule under `submodules/` and a relative
-      `.agents/skills` symlink.
-- [x] Document how to initialize/update the pinned skills and keep them out of
-      the application Docker build context.
-- [x] Verify the submodule pin, symlink target, formatting, and final diff.
+- Pinned SDK: supply APR is basis points; rewards APR is percentage scaled by
+  1e12. Normalize separately and use integer arithmetic.
+- Estimated APY assumes daily compounding for 365 days at unchanged current
+  rates; annual USDC estimate excludes fees and is not earned-interest history.
+- Reuse existing pool reads without API keys or dependencies. Missing/invalid
+  rates must say unavailable while preserving successfully read balances.
+- Mainnet-only integration: deterministic positive coverage, Devnet rejection
+  guard; no Mainnet test writes.
 
-## Constraints
+## Progress
 
-- Do not install upstream plugins or run their scripts; expose only the skill
-  definitions requested by the user.
-- Keep the submodule at its reviewed commit until explicitly updated.
-- Do not commit or push unless separately requested.
+- [x] Inspect clean checkout at a7023e0, Jupiter skills, current SDK and docs.
+- [x] Implement shared yield calculations and output on all three surfaces.
+- [x] Add conversion, output, missing-data and guard regression tests; docs.
+- [x] Format, validate, and review the implementation and intended diff.
 
 ## Validation
 
-- `git submodule status --recursive` reports pin
-  `a2211e3f6a7caa03310c7a9a8d816e723b0bdc5f` with no submodule modifications.
-- `.agents/skills` is a relative symlink to the submodule's `skills/`, and all
-  four upstream `SKILL.md` files are discoverable through it.
-- `npm run format:check` and `git diff --check` passed.
-- Runtime tests/build were not run: no application source or runtime dependency
-  changed. `.dockerignore` now excludes the agent-only directories.
+- `npm test`: 121 tests passed across 22 files, including 17 focused yield tests.
+- TypeScript lint/build, Prettier, Black25.1.0 (all 11 Python files), and
+  `git diff --check` passed.
+- Linux/amd64 `sol-wallet:yield-e2e` image built; all 22 Docker E2E tests passed.
+  Jupiter status/deposit dry-run Devnet guards reject without RPC requests.
+- No live Devnet suite or Mainnet writes were run. Positive-path Jupiter yield
+  validation is deterministic, as required for this mainnet-only integration.
+- Black/pexpect were installed only in temporary
+  `/tmp/sol-wallet-yield-validation.IW6xas/venv`; no system packages or runtime
+  dependencies were changed. Existing Docker/npm warnings did not block tests.
 
-No implementation work remains.
+Implementation and local validation are complete. The user authorized commit,
+push, and checking the resulting GitHub workflow; report publication results in
+the final handoff.

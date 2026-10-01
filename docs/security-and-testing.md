@@ -164,6 +164,22 @@ GitHub Actions secret. Never configure a Mainnet key for these tests.
 
 ## Docker E2E and GitHub Actions
 
+For the Jupiter yield display changes on 2026-10-01, all 121 unit tests across
+22 files passed, including rate-scale conversions, independent daily APY
+calculations, large integer deposit projections, missing/invalid/zero rates,
+human/JSON output, and deposit dry-runs that never unlock or broadcast.
+TypeScript lint/build, Prettier, Black for all 11 Python E2E files, and
+`git diff --check` passed. The Linux/amd64 image built and all 22 Docker E2E
+tests passed, including the Jupiter status and deposit dry-run Devnet guards.
+No live Devnet suite or Mainnet writes were run for this mainnet-only feature;
+positive-path tests use deterministic SDK/RPC fixtures.
+
+The host Python lacked Black, so validation used Black25.1.0 and `pexpect` in
+a temporary virtual environment under `/tmp`, with pip caching disabled. No
+system package or runtime dependency was changed. The Docker builder and npm
+reported existing deprecation, peer/install-script, and advisory warnings;
+these did not block the build or tests.
+
 The repository's Docker workflow performs these gates in order:
 
 ```text

@@ -93,7 +93,24 @@ describe("Jupiter Lend USDC boundary", () => {
     expect(position.protocolWithdrawable).toBe(2_000_000n);
     expect(position.supplied).toBe(1_000_000n);
     expect(position.withdrawable).toBe(1_000_000n);
+    expect(position.supplyRateRaw).toBe(3n);
+    expect(position.rewardsRateRaw).toBe(4n);
+    expect(position.ratesUpdatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(readClient.lending.getUserPosition).toHaveBeenCalledOnce();
+
+    // A missing analytics field must not turn a successfully read position
+    // into a balance error or invent a zero rewards rate.
+    readClient.lending.getJlTokenDetails.mockResolvedValue({
+      tokenAddress: receiptMint,
+      userSupplyData: { withdrawable: new BN("2000000") },
+      supplyRate: undefined as never,
+      rewardsRate: new BN("4"),
+    });
+    const missingRates = await adapter.getPosition(
+      address("FAe4sisG95oZ42w7buUn5qEE4TAnfTTFPiguZUHmhiF"),
+    );
+    expect(missingRates.supplyRateRaw).toBeNull();
+    expect(missingRates.supplied).toBe(1_000_000n);
   });
 
   it("converts official SDK instructions without losing account roles", () => {

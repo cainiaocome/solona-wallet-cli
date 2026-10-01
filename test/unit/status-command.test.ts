@@ -24,8 +24,9 @@ const mockedLend = vi.hoisted(() => ({
     receiptShares: 3_000_000n,
     receiptMint: "11111111111111111111111111111112",
     receiptTokenAccount: "11111111111111111111111111111113",
-    supplyRateRaw: 123n,
-    rewardsRateRaw: 456n,
+    supplyRateRaw: 420n as bigint | null,
+    rewardsRateRaw: 1_000_000_000_000n as bigint | null,
+    ratesUpdatedAt: "2026-10-01T12:00:00.000Z",
   },
 }));
 
@@ -59,6 +60,8 @@ describe("status portfolio overview", () => {
     vi.restoreAllMocks();
     mockedLend.fail = false;
     mockedLend.calls = 0;
+    mockedLend.position.supplyRateRaw = 420n;
+    mockedLend.position.rewardsRateRaw = 1_000_000_000_000n;
   });
 
   it("reports SOL and aggregates non-zero token accounts by mint", async () => {
@@ -121,6 +124,14 @@ describe("status portfolio overview", () => {
             walletBalanceUsdc: "2",
             suppliedUsdc: "3",
             currentlyWithdrawableUsdc: "2.5",
+            yield: {
+              status: "available",
+              baseAprPercent: "4.2",
+              rewardsAprPercent: "1",
+              totalAprPercent: "5.2",
+              compounding: "daily",
+              updatedAt: "2026-10-01T12:00:00.000Z",
+            },
           },
         },
       });
@@ -387,11 +398,52 @@ describe("status portfolio overview", () => {
       expect(rendered).toContain("3 USDC");
       expect(rendered).toContain("Withdrawable now");
       expect(rendered).toContain("2.5 USDC");
+      expect(rendered).toMatch(/Total APR\s*:\s*5.2%/);
       expect(rendered.indexOf("LIQUID BALANCES")).toBeLessThan(
         rendered.indexOf("POSITIONS · NOT LIQUID"),
       );
       expect(rendered.indexOf("Withdrawable now")).toBeLessThan(
         rendered.indexOf("NATIVE STAKE"),
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("retains balances but degrades status when Jupiter rates are missing", async () => {
+    const directory = await mkdtemp(
+      path.join(os.tmpdir(), "sol-wallet-status-yield-"),
+    );
+    const output: string[] = [];
+    try {
+      const wallet = await createWallet(directory);
+      const context = createCommandContext(
+        {
+          configDir: directory,
+          cluster: "mainnet",
+          rpcUrl: "https://rpc.example.invalid",
+          commitment: "confirmed",
+        },
+        { json: true, verbose: false },
+        { currentWalletId: wallet.id },
+      );
+      context.getClient = () => ({ rpc: healthyRpc() }) as never;
+      vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+        output.push(String(chunk));
+        return true;
+      });
+      mockedLend.position.rewardsRateRaw = null;
+      await executeLine(context, "status");
+      const result = JSON.parse(output.join(""));
+      expect(result.health).toBe("degraded");
+      expect(result.balances.sol.amount).toBe("1.25");
+      expect(result.positions.jupiterLend).toMatchObject({
+        status: "available",
+        suppliedUsdc: "3",
+        yield: { status: "unavailable", reason: "missing-or-invalid-rates" },
+      });
+      expect(result.positions.jupiterLend.yield).not.toHaveProperty(
+        "totalAprPercent",
       );
     } finally {
       await rm(directory, { recursive: true, force: true });

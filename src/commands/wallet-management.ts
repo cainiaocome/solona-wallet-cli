@@ -9,6 +9,11 @@ import {
   table,
 } from "../output/human.js";
 import { color } from "../output/terminal.js";
+import { lendYieldRows } from "../output/lending.js";
+import {
+  calculateLendYield,
+  type JupiterLendYield,
+} from "../integrations/jupiter-lend/yield.js";
 import {
   asAppError,
   KeystoreError,
@@ -532,6 +537,7 @@ export async function status(context: CommandContext): Promise<void> {
         suppliedUsdc: string;
         currentlyWithdrawable: bigint;
         currentlyWithdrawableUsdc: string;
+        yield: JupiterLendYield;
       }
     | { status: "unavailable"; error: string }
     | { status: "not_supported"; reason: "mainnet-only" }
@@ -646,6 +652,11 @@ export async function status(context: CommandContext): Promise<void> {
               position.withdrawable,
               JUPITER_LEND_USDC_DECIMALS,
             ),
+            yield: calculateLendYield(
+              position.supplyRateRaw,
+              position.rewardsRateRaw,
+              position.ratesUpdatedAt,
+            ),
           };
         } else {
           jupiterPosition = {
@@ -682,9 +693,10 @@ export async function status(context: CommandContext): Promise<void> {
     stakePosition,
     ...(context.config.cluster === "mainnet" ? [jupiterPosition] : []),
   ];
-  const hasUnavailableSection = requiredSections.some(
-    (section) => section?.status === "unavailable",
-  );
+  const hasUnavailableSection =
+    requiredSections.some((section) => section?.status === "unavailable") ||
+    (jupiterPosition?.status === "available" &&
+      jupiterPosition.yield.status === "unavailable");
   const health =
     rpcState.status === "unavailable"
       ? "unavailable"
@@ -771,6 +783,7 @@ export async function status(context: CommandContext): Promise<void> {
                   `${jupiterPosition.currentlyWithdrawableUsdc} USDC`,
                   "success",
                 ],
+                ...lendYieldRows(jupiterPosition.yield, false),
               ])
             : jupiterPosition?.status === "not_supported"
               ? "Mainnet only; not queried on devnet."

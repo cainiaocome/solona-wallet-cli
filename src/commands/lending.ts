@@ -48,6 +48,12 @@ import {
   networkLabel,
   sectionTitle,
 } from "../output/human.js";
+import { lendYieldRows } from "../output/lending.js";
+import {
+  calculateLendYield,
+  estimateAnnualYield,
+  YIELD_ASSUMPTION,
+} from "../integrations/jupiter-lend/yield.js";
 
 /**
  * Jupiter Lend command layer.
@@ -91,6 +97,12 @@ export async function lendDeposit(
   const position = await runAdapter("reading Jupiter Lend position", () =>
     adapter.getPosition(owner),
   );
+  const yieldInfo = calculateLendYield(
+    position.supplyRateRaw,
+    position.rewardsRateRaw,
+    position.ratesUpdatedAt,
+  );
+  const annualYield = estimateAnnualYield(amount, yieldInfo);
   await runLendInstruction(
     context,
     command,
@@ -107,8 +119,10 @@ export async function lendDeposit(
       protocol: "Jupiter Lend Earn",
       cluster: context.config.cluster,
       currentSupplied: position.supplied,
+      yield: yieldInfo,
+      estimatedAnnualYield: annualYield,
     },
-    actionPreview("JUPITER LEND DEPOSIT · TRANSACTION PREVIEW", [
+    `${actionPreview("JUPITER LEND DEPOSIT · TRANSACTION PREVIEW", [
       ["Wallet", String(owner)],
       ["Asset", "USDC"],
       [
@@ -118,7 +132,16 @@ export async function lendDeposit(
       ],
       ["Protocol", "Jupiter Lend Earn"],
       ["Network", networkLabel(context.config.cluster)],
-    ]),
+      ...lendYieldRows(yieldInfo),
+      [
+        "Estimated annual yield",
+        annualYield.status === "available"
+          ? annualYield.belowOneBaseUnit
+            ? "<0.000001 USDC"
+            : `~${annualYield.amountUsdc} USDC`
+          : "Unavailable",
+      ],
+    ])}${yieldInfo.status === "available" ? `\n${YIELD_ASSUMPTION}` : ""}`,
     () => adapter.getPosition(owner),
   );
 }
@@ -461,6 +484,11 @@ function positionData(
     receiptTokenShares: position.receiptShares,
     protocolSupplyRateRaw: position.supplyRateRaw,
     protocolRewardsRateRaw: position.rewardsRateRaw,
+    yield: calculateLendYield(
+      position.supplyRateRaw,
+      position.rewardsRateRaw,
+      position.ratesUpdatedAt,
+    ),
   };
 }
 
@@ -477,7 +505,9 @@ function positionHuman(
       ["Supplied", `${data.suppliedUsdc} USDC`, "emphasis"],
       ["Protocol liquidity", `${data.protocolWithdrawableUsdc} USDC`],
       ["Withdrawable now", `${data.currentlyWithdrawableUsdc} USDC`, "success"],
+      ...lendYieldRows(data.yield),
     ]),
+    ...(data.yield.status === "available" ? [YIELD_ASSUMPTION] : []),
   ];
   if (verbose) {
     lines.push(

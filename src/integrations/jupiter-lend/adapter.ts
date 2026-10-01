@@ -21,6 +21,7 @@ import {
 import type { AppConfig } from "../../config/config.js";
 import { JupiterLendError } from "../../errors/errors.js";
 import { formatUnits } from "../../solana/amounts.js";
+import { optionalRate } from "./yield.js";
 
 /**
  * Compatibility boundary for the pinned Jupiter Earn SDK.
@@ -68,8 +69,9 @@ export interface JupiterLendPosition {
   receiptShares: bigint;
   receiptMint: Address;
   receiptTokenAccount: Address;
-  supplyRateRaw: bigint;
-  rewardsRateRaw: bigint;
+  supplyRateRaw: bigint | null;
+  rewardsRateRaw: bigint | null;
+  ratesUpdatedAt?: string;
 }
 
 export interface JupiterLendAdapterDependencies {
@@ -160,8 +162,9 @@ export class JupiterLendAdapter {
       receiptShares: toBigInt(position.jlTokenShares),
       receiptMint: address(receiptMint.toBase58()),
       receiptTokenAccount: address(receiptTokenAccount.toBase58()),
-      supplyRateRaw: toBigInt(details.supplyRate),
-      rewardsRateRaw: toBigInt(details.rewardsRate),
+      supplyRateRaw: optionalRate(details.supplyRate),
+      rewardsRateRaw: optionalRate(details.rewardsRate),
+      ratesUpdatedAt: new Date().toISOString(),
     };
   }
 
